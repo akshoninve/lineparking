@@ -22,8 +22,23 @@ $submitted = [
     'fio' => '', 'phone' => '', 'parking' => '', 'spot' => '', 'month' => '', 'agree' => '',
 ];
 
-// Пользователь вернулся со страницы оплаты Robokassa
-$returnedFromPayment = isset($_GET['payment']) && $_GET['payment'] === 'return';
+// Пользователь вернулся со страницы оплаты Robokassa.
+//
+// Success URL / Fail URL в кабинете Robokassa указывают просто на
+// корень сайта (без query-параметров) с методом GET — это требование
+// самой Robokassa: при методе GET она сама допишет к URL свои
+// параметры (OutSum, InvId, SignatureValue), а собственный маркер
+// вида ?payment=return в самом URL Robokassa запрещает добавлять.
+// Поэтому вместо чтения такого маркера проверяем подпись параметров,
+// которые Robokassa подставляет сама (см.
+// includes/robokassa.php::robokassaVerifyReturnSignature()) — так
+// мы надёжно отличаем "человек вернулся со страницы Robokassa" от
+// обычного захода на главную. Старый маркер ?payment=return тоже
+// продолжает поддерживаться — на случай, если он где-то ещё
+// используется (например, в сохранённой ссылке).
+$returnedFromPayment = (isset($_GET['payment']) && $_GET['payment'] === 'return')
+    || (isset($_GET['OutSum'], $_GET['InvId'], $_GET['SignatureValue'])
+        && robokassaVerifyReturnSignature($_GET['OutSum'], $_GET['InvId'], $_GET['SignatureValue']));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
 

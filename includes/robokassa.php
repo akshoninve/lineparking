@@ -18,23 +18,29 @@
  * ==================== КАК ПОДКЛЮЧИТЬ ОПЛАТУ ====================
  * 1. Зарегистрируйте магазин в личном кабинете Robokassa и укажите
  *    в Технических настройках:
- *      ResultURL: https://xn--80aaaxdesfic0ah2j.xn--p1ai/result.php
- *      SuccessURL: https://xn--80aaaxdesfic0ah2j.xn--p1ai/index.php?payment=return
- *      FailURL:    https://xn--80aaaxdesfic0ah2j.xn--p1ai/index.php?payment=return
- *    (punycode того же кириллического домена, что и раньше у ЮKassa).
- * 2. Скопируйте MerchantLogin, Пароль №1 и Пароль №2 (для тестового
- *    режима — ОТДЕЛЬНУЮ тестовую пару паролей из того же раздела
- *    Технических настроек, не боевую).
+ *      ResultURL:  https://лайнпаркинг.рф/result.php (в punycode),
+ *                  метод — GET или POST, оба поддерживаются.
+ *      SuccessURL: https://лайнпаркинг.рф/ (просто корень домена,
+ *                  БЕЗ query-параметров — Robokassa при методе GET
+ *                  сама допишет к нему свои параметры OutSum/InvId/
+ *                  SignatureValue, поэтому наш собственный маркер
+ *                  вида ?payment=return в самом URL Robokassa
+ *                  запрещает, если метод GET). Метод — GET.
+ *      FailURL:    так же, как SuccessURL.
+ *    Корень домена открывает index.php стандартными настройками
+ *    хостинга, так что дополнительно ничего создавать не нужно —
+ *    возврат с оплаты обрабатывается прямо в index.php, см.
+ *    robokassaVerifyReturnSignature() ниже и includes/form-handler.php.
+ * 2. Скопируйте MerchantLogin (единый для теста и боя), Пароль №1 и
+ *    Пароль №2 (для тестового режима — ОТДЕЛЬНУЮ тестовую пару из
+ *    того же раздела Технических настроек, не боевую).
  * 3. Впишите их в /home/srv250266/config.php:
  *        define('ROBOKASSA_MERCHANT_LOGIN', 'ваш_логин');
  *        define('ROBOKASSA_PASSWORD1', 'тестовый_или_боевой_пароль_1');
  *        define('ROBOKASSA_PASSWORD2', 'тестовый_или_боевой_пароль_2');
  *        define('ROBOKASSA_IS_TEST', true); // true — тестовый режим, false — боевой
  * 4. Больше ничего менять не нужно — форма на сайте сама начнёт
- *    переводить клиента на страницу оплаты Robokassa. Пока
- *    ROBOKASSA_IS_TEST = true, деньги не списываются по-настоящему
- *    (см. документацию Robokassa, раздел "Тестовый режим") — используются
- *    именно тестовые пароли, не боевые.
+ *    переводить клиента на страницу оплаты Robokassa.
  *
  * Пока ключи не вписаны, сайт работает в резервном режиме: заявка
  * сохраняется в лог, а клиенту показываются реквизиты для оплаты
@@ -157,4 +163,50 @@ function robokassaVerifyResultSignature($outSum, $invId, $signatureValue): bool 
     }
     $expected = md5($outSum . ':' . $invId . ':' . ROBOKASSA_PASSWORD2);
     return hash_equals(strtolower($expected), strtolower((string)$signatureValue));
+}
+
+/**
+ * Проверяет подпись, с которой Robokassa возвращает клиента на сайт
+ * через SuccessURL/FailURL (метод GET). В отличие от ResultURL здесь
+ * используется Пароль#1 — та же пара, которой подписывается создание
+ * платежа: MD5(OutSum:InvId:Пароль#1).
+ *
+ * Используется вместо собственного маркера ?payment=return в самом
+ * URL — так Success/Fail URL в кабинете Robokassa можно оставить
+ * "чистыми" (без query-параметров), что требуется при методе GET
+ * (см. валидацию в Технических настройках магазина), а факт возврата
+ * именно со страницы оплаты Robokassa всё равно надёжно определяется
+ * по параметрам, которые Robokassa сама подставляет в GET-запрос.
+ *
+ * ВАЖНО: это только признак "человек вернулся со страницы Robokassa",
+ * а не подтверждение оплаты — окончательный статус выставляется
+ * только через result.php (ResultURL), т.к. переход по SuccessURL
+ * происходит в браузере клиента и теоретически может не дойти до
+ * сервера (закрыл вкладку и т.п.), в отличие от серверного ResultURL.
+ */
+function robokassaVerifyReturnSignature($outSum, $invId, $signatureValue): bool {
+    if (!robokassaConfigured()) {
+        return false;
+    }
+    $expected = md5($outSum . ':' . $invId . ':' . ROBOKASSA_PASSWORD1);
+    return hash_equals(strtolower($expected), strtolower((string)$signatureValue));
+}
+
+/**
+ * Пишет диагностику по входящим уведомлениям ResultURL в
+ * private/logs/robokassa-result.log — отдельно от zayavki-*.log,
+ * чтобы не путать заявки клиентов с технической отладкой.
+ *
+ * Логируем КАЖДОЕ обращение к result.php (и успешное, и с ошибкой) —
+ * пока идёт отладка интеграции, это единственный способ увидеть,
+ * доходят ли вообще уведомления от Robokassa до сервера и что именно
+ * в них приходит, не имея доступа к истории уведомлений в кабинете
+ * Robokassa.
+ */
+function logRobokassaResult(string $status, array $context): void {
+    if (!defined('LOGS_PATH')) {
+        return;
+    }
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $status . ' | ' . json_encode($context, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+    @file_put_contents(LOGS_PATH . '/robokassa-result.log', $line, FILE_APPEND | LOCK_EX);
 }
