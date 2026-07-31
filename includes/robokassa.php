@@ -194,19 +194,32 @@ function robokassaVerifyReturnSignature($outSum, $invId, $signatureValue): bool 
 
 /**
  * Пишет диагностику по входящим уведомлениям ResultURL в
- * private/logs/robokassa-result.log — отдельно от zayavki-*.log,
+ * private/logs/robokassa-result-<год>.log — отдельно от zayavki-*.log,
  * чтобы не путать заявки клиентов с технической отладкой.
  *
  * Логируем КАЖДОЕ обращение к result.php (и успешное, и с ошибкой) —
- * пока идёт отладка интеграции, это единственный способ увидеть,
- * доходят ли вообще уведомления от Robokassa до сервера и что именно
- * в них приходит, не имея доступа к истории уведомлений в кабинете
- * Robokassa.
+ * это единственный способ увидеть, доходят ли вообще уведомления от
+ * Robokassa до сервера и что именно в них приходит, не имея доступа
+ * к истории уведомлений в кабинете Robokassa. Именно поэтому файл
+ * ротируется по годам так же, как zayavki-YYYY.log (см.
+ * includes/form-handler.php): сюда попадает не только каждый успешный
+ * платёж, но и весь фоновый "мусор" — случайные боты, которые находят
+ * и дёргают публичный URL result.php мусорными запросами
+ * (это и есть большинство строк missing_params/bad_signature ниже,
+ * не путать с реальными неудачными платежами — по ним Robokassa
+ * ResultURL вообще не присылает, см. её документацию: уведомление
+ * приходит только по факту УСПЕШНОЙ оплаты). При заметном потоке
+ * платежей (сотни в месяц) один бессрочный файл со временем стал бы
+ * неудобным для открытия и хранения, а разбивка по годам позволяет
+ * спокойно архивировать/удалять старые года, не трогая текущий файл —
+ * это чисто диагностический журнал для человека, его не читает
+ * никакой код приложения, так что объединять года при чтении не нужно.
  */
 function logRobokassaResult(string $status, array $context): void {
     if (!defined('LOGS_PATH')) {
         return;
     }
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $status . ' | ' . json_encode($context, JSON_UNESCAPED_UNICODE) . PHP_EOL;
-    @file_put_contents(LOGS_PATH . '/robokassa-result.log', $line, FILE_APPEND | LOCK_EX);
+    $path = LOGS_PATH . '/robokassa-result-' . date('Y') . '.log';
+    @file_put_contents($path, $line, FILE_APPEND | LOCK_EX);
 }
