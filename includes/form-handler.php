@@ -6,7 +6,7 @@
  * Подключается из index.php ПОСЛЕ bootstrap.php — поэтому здесь уже
  * доступны $parkings, $months, $pricePerMonth и т.д. (parkings-data.php),
  * а также функции isLevitanPremiumSpot() (functions.php) и
- * createYookassaPayment() (yookassa.php).
+ * createRobokassaPayment() (robokassa.php).
  *
  * Результат работы файла — набор переменных, которые использует
  * разметка в index.php: $errors, $success, $lastTariff, $paymentUrl,
@@ -22,7 +22,7 @@ $submitted = [
     'fio' => '', 'phone' => '', 'parking' => '', 'spot' => '', 'month' => '', 'agree' => '',
 ];
 
-// Пользователь вернулся со страницы оплаты ЮKassa
+// Пользователь вернулся со страницы оплаты Robokassa
 $returnedFromPayment = isset($_GET['payment']) && $_GET['payment'] === 'return';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
@@ -59,16 +59,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
         $tariffText  = number_format($amount, 0, ',', ' ') . ' ₽' . ($isPremium ? ' (место повышенной категории)' : '');
         $parkingName = $parkings[$submitted['parking']][0];
 
-        // Пытаемся создать платёж в ЮKassa ДО записи в лог — так в
-        // логе сразу будет payment_id, по которому webhook.php потом
-        // найдёт эту заявку и проставит финальный статус оплаты
-        // (см. includes/functions.php::updateZayavkaStatusByPaymentId()).
+        // Готовим номер счёта (InvId) и формируем платёжную ссылку
+        // Robokassa ДО записи в лог — так в логе сразу будет payment_id
+        // (= InvId Robokassa), по которому result.php потом найдёт эту
+        // заявку и проставит финальный статус оплаты (см.
+        // includes/functions.php::updateZayavkaStatusByPaymentId()).
+        // В отличие от ЮKassa здесь нет сетевого запроса на создание
+        // платежа — ссылка с подписью формируется локально (см.
+        // includes/robokassa.php::createRobokassaPayment()).
         $description = "Машино-место №{$submitted['spot']}, {$parkingName}, {$submitted['month']}";
-        $metadata = [
-            'fio' => $submitted['fio'], 'phone' => $submitted['phone'],
-            'parking' => $parkingName, 'spot' => $submitted['spot'], 'month' => $submitted['month'],
-        ];
-        $payment = createYookassaPayment($amount, $description, $metadata);
+        $invId       = nextRobokassaInvId();
+        $payment     = $invId !== null ? createRobokassaPayment($amount, $description, $invId) : null;
 
         $entry = [
             'date'       => date('Y-m-d H:i:s'),
@@ -107,7 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
         $headers = "Content-Type: text/plain; charset=UTF-8\r\nFrom: ЛайнПаркинг <noreply@лайнпаркинг.рф>\r\n";
         @mail(NOTIFY_EMAIL, $subject, $body, $headers);
 
-        // Явная проверка типа/непустоты — если createYookassaPayment()
+        // Явная проверка типа/непустоты — если createRobokassaPayment()
         // вернула не-массив с валидной строкой url (например, ключи ещё
         // не подключены — тогда она вернёт null), просто уходим в
         // резервный сценарий ниже, а не пытаемся редиректить на мусор.
@@ -116,7 +117,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
             exit;
         }
 
-        // ЮKassa ещё не подключена (идёт модерация) или произошла ошибка — резервный сценарий
+        // Robokassa ещё не подключена (не вписаны ключи) или не удалось
+        // получить InvId — резервный сценарий
         $paymentUnavailable = true;
         $success            = true;
         $lastTariff         = $entry['tariff'];

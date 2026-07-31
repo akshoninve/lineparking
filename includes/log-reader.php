@@ -6,9 +6,9 @@
  * парковке за выбранный месяц.
  *
  * Формат строки лога (одна заявка — одна строка JSON) в файле
- * zayavki-<год>.log, см. includes/form-handler.php и обработчик
- * уведомлений ЮKassa, который дописывает payment_id и меняет
- * status на "оплачено":
+ * zayavki-<год>.log, см. includes/form-handler.php и result.php
+ * (обработчик ResultURL-уведомлений Robokassa, который дописывает
+ * payment_id и меняет status на "оплачено"):
  *   {"date":"...", "fio":"...", "phone":"...", "parking":"Парковка «Левитан»",
  *    "spot":"2", "month":"Январь", "amount":12000, "tariff":"...",
  *    "payment_id":"...", "status":"оплачено"}

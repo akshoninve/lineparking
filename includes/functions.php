@@ -47,10 +47,10 @@ function levitanPremiumRangesText($ranges) {
  * заявки из form-handler.php — она пишет только в файл ТЕКУЩЕГО
  * года, поэтому конфликт возможен только с ним).
  *
- * Вызывается из webhook.php после получения и проверки уведомления
- * от ЮKassa об изменении статуса платежа.
+ * Вызывается из result.php после получения и проверки подписи
+ * ResultURL-уведомления от Robokassa об оплате.
  *
- * @param string $paymentId Идентификатор платежа в ЮKassa
+ * @param string $paymentId Идентификатор платежа (InvId в Robokassa)
  * @param string $newStatus Новый статус для записи в лог, например 'оплачено'
  * @return bool true, если подходящая запись была найдена и обновлена
  */

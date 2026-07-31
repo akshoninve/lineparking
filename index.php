@@ -8,13 +8,13 @@
  *   - bootstrap.php               — подключает config.php (выше public_html)
  *                                    и общие include-файлы;
  *   - includes/form-handler.php   — обработка POST-запроса формы;
- *   - includes/yookassa.php       — интеграция с ЮKassa;
+ *   - includes/robokassa.php      — интеграция с Robokassa;
  *   - includes/parkings-data.php  — тарифы и список парковок;
  *   - assets/css/style.css        — стили;
  *   - assets/js/main.js           — интерактив (пересчёт суммы, копирование).
  *
- * ПОДКЛЮЧЕНИЕ ОПЛАТЫ ЮKASSA: впишите ключи в /home/srv250266/config.php
- * (см. подробную инструкцию в комментарии там же и в includes/yookassa.php).
+ * ПОДКЛЮЧЕНИЕ ОПЛАТЫ ROBOKASSA: впишите ключи в /home/srv250266/config.php
+ * (см. подробную инструкцию в комментарии там же и в includes/robokassa.php).
  */
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/includes/form-handler.php';

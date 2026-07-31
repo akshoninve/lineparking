@@ -15,4 +15,4 @@ require_once dirname(__DIR__) . '/private/config.php';
 
 require_once __DIR__ . '/includes/functions.php';
 require_once __DIR__ . '/includes/parkings-data.php';
-require_once __DIR__ . '/includes/yookassa.php';
+require_once __DIR__ . '/includes/robokassa.php';
