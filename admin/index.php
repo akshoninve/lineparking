@@ -10,8 +10,8 @@
  * нужно, чтобы отдельно показать место, оплаченное два раза и более
  * ("дубль оплаты", отдельный цвет в сетке), и увидеть оба платежа сразу.
  *
- * Ниже сетки — «Журнал событий»: хронологический список ВСЕХ заявок
- * за тот же выбранный месяц (getEntriesForMonth() в log-reader.php),
+ * Ниже сетки — «Журнал событий»: список ВСЕХ заявок за текущий
+ * календарный год (loadZayavkiLog($currentYear)), новые сверху,
  * скрыт под кнопкой по умолчанию (как блок «Реквизиты» на index.php).
  * Отдельного логина для него не нужно — вся страница уже защищена
  * requireAdminLogin() выше.
@@ -31,7 +31,16 @@ if (!in_array($selectedMonth, $months, true)) {
 }
 
 $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth);
-$monthEntries      = getEntriesForMonth($entries, $selectedMonth);
+
+// Журнал событий: все заявки за ТЕКУЩИЙ календарный год, без привязки
+// к месяцу оплаты — это ровно содержимое zayavki-<год>.log (+ legacy,
+// если остался), см. loadZayavkiLog(). Отдельного фильтра не делаем —
+// один год обычно не так уж много строк, чтобы это было проблемой.
+// array_reverse() — чтобы самые свежие записи были сверху таблицы
+// (loadZayavkiLog() отдаёт их в порядке дозаписи в файл, т.е. старые
+// сначала).
+$currentYear = date('Y');
+$logEntries  = array_reverse(loadZayavkiLog($currentYear));
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -151,11 +160,11 @@ $monthEntries      = getEntriesForMonth($entries, $selectedMonth);
 
     <div class="log-card" id="logCard" hidden>
       <div class="log-head">
-        <div class="log-title">Журнал заявок · <?= htmlspecialchars($selectedMonth, ENT_QUOTES, 'UTF-8') ?></div>
-        <div class="log-sub mono">Хронологический порядок — как в логе, все парковки вместе</div>
+        <div class="log-title">Журнал заявок · <?= htmlspecialchars($currentYear, ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="log-sub mono">Новые записи сверху, все парковки вместе</div>
       </div>
-      <?php if (empty($monthEntries)): ?>
-      <div class="log-empty">За «<?= htmlspecialchars($selectedMonth, ENT_QUOTES, 'UTF-8') ?>» заявок нет.</div>
+      <?php if (empty($logEntries)): ?>
+      <div class="log-empty">За <?= htmlspecialchars($currentYear, ENT_QUOTES, 'UTF-8') ?> год заявок нет.</div>
       <?php else: ?>
       <div class="log-table-wrap">
         <table class="log-table">
@@ -172,7 +181,7 @@ $monthEntries      = getEntriesForMonth($entries, $selectedMonth);
             </tr>
           </thead>
           <tbody>
-            <?php foreach ($monthEntries as $e): ?>
+            <?php foreach ($logEntries as $e): ?>
             <tr>
               <td class="mono"><?= htmlspecialchars($e['date'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars($e['fio'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
