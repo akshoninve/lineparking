@@ -40,7 +40,8 @@
  * нередактированный zayavki.log, если он ещё остался с прошлых
  * версий, затем zayavki-YYYY.log по возрастанию года) — это важно,
  * т.к. getSpotStatusesForMonth() считает актуальной последнюю
- * встреченную запись по месту+месяцу.
+ * встреченную запись по месту+месяцу, а resolveSpotDisplay() смотрит
+ * на ВСЕ записи по месту+месяцу (в т.ч. чтобы найти дубли оплаты).
  * Повреждённые/нераспознанные строки молча пропускаются, чтобы
  * одна битая строка не ломала всю админку.
  */
@@ -109,25 +110,34 @@ function buildParkingNameToKeyMap(array $parkings): array {
 }
 
 /**
- * Возвращает статус каждого машино-места за конкретный месяц по каждой парковке:
+ * Возвращает ВСЕ заявки по каждому машино-месту за конкретный месяц
+ * по каждой парковке:
  *   [
  *     'levitan' => [
- *        1 => [...запись из лога...] | null,   // null — заявок за этот месяц не было
- *        2 => [...],
+ *        1 => [ ...заявка1..., ...заявка2... ],  // 0+ заявок за этот месяц,
+ *        2 => [ ...заявка... ],                  // в хронологическом порядке
+ *        3 => [],                                // пусто — заявок не было
  *        ...
  *     ],
- *     'nesterov' => [...],
  *     'kupelinka' => [...],
  *   ]
- * Если по месту+месяцу несколько записей в логе — побеждает последняя
- * (самая свежая по порядку добавления, лог только дописывается в конец).
+ *
+ * Раньше эта функция схлопывала все заявки по месту+месяцу в одну
+ * (побеждала последняя) — этого было достаточно для статуса "оплачено/
+ * ожидает/пусто", но невозможно было заметить ситуацию, когда одно и
+ * то же место случайно оплатили дважды (например, клиент дважды нажал
+ * "Оплатить" или вручную перевёл деньги, уже имея заявку с успешной
+ * онлайн-оплатой). Теперь функция сохраняет весь список заявок по
+ * месту, а решение о том, что показывать (обычный статус или "дубль
+ * оплаты"), принимает resolveSpotDisplay() ниже — так админка может
+ * явно предупредить о повторной оплате и показать оба платежа.
  */
 function getSpotStatusesForMonth(array $entries, array $parkings, string $month): array {
     $nameToKey = buildParkingNameToKeyMap($parkings);
 
     $result = [];
     foreach ($parkings as $key => [$name, $capacity]) {
-        $result[$key] = array_fill(1, $capacity, null);
+        $result[$key] = array_fill(1, $capacity, []);
     }
 
     foreach ($entries as $entry) {
@@ -142,26 +152,65 @@ function getSpotStatusesForMonth(array $entries, array $parkings, string $month)
         if ($spot < 1 || !array_key_exists($spot, $result[$key])) {
             continue;
         }
-        $result[$key][$spot] = $entry;
+        $result[$key][$spot][] = $entry;
     }
 
     return $result;
 }
 
 /**
+ * Определяет, как показать одно машино-место в админке, на основе
+ * СПИСКА всех его заявок за месяц (см. getSpotStatusesForMonth()).
+ *
+ * Возвращает:
+ *   [
+ *     'state'       => 'empty' | 'paid' | 'pending' | 'duplicate',
+ *     'entry'       => последняя заявка (для обычной карточки) | null,
+ *     'paidEntries' => все заявки со статусом "оплачено" (для 'duplicate'),
+ *   ]
+ *
+ * 'duplicate' — особый статус: заявок со статусом "оплачено" по этому
+ * месту и месяцу ДВЕ и более. Это значит, что за одно и то же место
+ * за один и тот же месяц прошло два (или больше) реальных платежа —
+ * почти наверняка ошибка (двойное списание у клиента, дублирующая
+ * заявка и т.п.), которую стоит проверить вручную и, возможно,
+ * вернуть деньги за лишний платёж. Обычная ситуация "заявка создана
+ * повторно, но оплачена лишь одна из них" под 'duplicate' не
+ * попадает — там status = 'paid' по последней заявке, как и раньше.
+ */
+function resolveSpotDisplay(array $spotEntries): array {
+    if (empty($spotEntries)) {
+        return ['state' => 'empty', 'entry' => null, 'paidEntries' => []];
+    }
+
+    $paidEntries = array_values(array_filter(
+        $spotEntries,
+        fn($e) => ($e['status'] ?? '') === 'оплачено'
+    ));
+
+    if (count($paidEntries) >= 2) {
+        return [
+            'state'       => 'duplicate',
+            'entry'       => end($spotEntries),
+            'paidEntries' => $paidEntries,
+        ];
+    }
+
+    $last = end($spotEntries);
+    $state = (($last['status'] ?? '') === 'оплачено') ? 'paid' : 'pending';
+
+    return ['state' => $state, 'entry' => $last, 'paidEntries' => $paidEntries];
+}
+
+/**
  * Короткая сводка по парковке за месяц: сколько мест оплачено /
- * ожидает оплаты (или другой незавершённый статус) / без заявок вовсе.
+ * ожидает оплаты (или другой незавершённый статус) / без заявок вовсе /
+ * оплачено дважды и более (см. resolveSpotDisplay()).
  */
 function summarizeParkingStatuses(array $spotStatuses): array {
-    $summary = ['paid' => 0, 'pending' => 0, 'empty' => 0, 'total' => count($spotStatuses)];
-    foreach ($spotStatuses as $entry) {
-        if ($entry === null) {
-            $summary['empty']++;
-        } elseif (($entry['status'] ?? '') === 'оплачено') {
-            $summary['paid']++;
-        } else {
-            $summary['pending']++;
-        }
+    $summary = ['paid' => 0, 'pending' => 0, 'empty' => 0, 'duplicate' => 0, 'total' => count($spotStatuses)];
+    foreach ($spotStatuses as $spotEntries) {
+        $summary[resolveSpotDisplay($spotEntries)['state']]++;
     }
     return $summary;
 }

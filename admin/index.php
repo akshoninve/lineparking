@@ -4,6 +4,11 @@
  * Админка: статус оплаты машино-мест по каждой парковке за выбранный
  * месяц (с годом, например "Июль 2026"). Источник данных — лог заявок
  * (private/logs/zayavki-<год>.log), см. includes/log-reader.php.
+ *
+ * Статус места считается через resolveSpotDisplay() (log-reader.php) по
+ * ВСЕМ заявкам этого места за месяц, а не только по последней — это
+ * нужно, чтобы отдельно показать место, оплаченное два раза и более
+ * ("дубль оплаты", отдельный цвет в сетке), и увидеть оба платежа сразу.
  */
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../includes/admin-auth.php';
@@ -26,7 +31,7 @@ $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Оплаты мест — Админка ЛайнПаркинг</title>
+<title>Панель администратора — ЛайнПаркинг</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="../assets/css/admin.css">
 </head>
@@ -34,7 +39,7 @@ $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth
 
 <header class="admin-header">
   <div class="wrap admin-header-row">
-    <div class="brand"><span class="p-sign">P</span>ЛайнПаркинг · Админка</div>
+    <div class="brand"><span class="p-sign">P</span>ЛайнПаркинг · Панель администратора</div>
     <a class="logout-link" href="logout.php">Выйти</a>
   </div>
 </header>
@@ -61,21 +66,34 @@ $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth
       <div class="summary mono">
         <span class="s-paid"><?= (int)$summary['paid'] ?> оплачено</span>
         <span class="s-pending"><?= (int)$summary['pending'] ?> ожидает</span>
+        <?php if ($summary['duplicate'] > 0): ?>
+        <span class="s-duplicate">⚠ <?= (int)$summary['duplicate'] ?> дубль оплаты</span>
+        <?php endif; ?>
         <span class="s-empty"><?= (int)$summary['empty'] ?> без заявки</span>
         <span class="s-total">из <?= (int)$summary['total'] ?></span>
       </div>
     </div>
     <div class="spot-grid">
-      <?php foreach ($spotStatuses as $spotNum => $entry):
-          if ($entry === null) {
-              $cls = 'spot-empty';
-              $titleAttr = 'Заявок нет';
-          } elseif (($entry['status'] ?? '') === 'оплачено') {
-              $cls = 'spot-paid';
-              $titleAttr = 'Оплачено';
-          } else {
-              $cls = 'spot-pending';
-              $titleAttr = $entry['status'] ?? 'Статус неизвестен';
+      <?php foreach ($spotStatuses as $spotNum => $spotEntries):
+          $resolved = resolveSpotDisplay($spotEntries);
+          $entry    = $resolved['entry'];
+
+          switch ($resolved['state']) {
+              case 'empty':
+                  $cls = 'spot-empty';
+                  $titleAttr = 'Заявок нет';
+                  break;
+              case 'duplicate':
+                  $cls = 'spot-duplicate';
+                  $titleAttr = 'Оплачено ' . count($resolved['paidEntries']) . ' раза — требует проверки';
+                  break;
+              case 'paid':
+                  $cls = 'spot-paid';
+                  $titleAttr = 'Оплачено';
+                  break;
+              default:
+                  $cls = 'spot-pending';
+                  $titleAttr = $entry['status'] ?? 'Статус неизвестен';
           }
       ?>
       <button
@@ -92,12 +110,64 @@ $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth
         data-parking="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
         data-spot="<?= (int)$spotNum ?>"
         data-month="<?= htmlspecialchars($selectedMonth, ENT_QUOTES, 'UTF-8') ?>"
+        <?php if ($resolved['state'] === 'duplicate'):
+            // Список ВСЕХ оплаченных заявок по этому месту — кладём в один
+            // JSON-атрибут, а не по одному data-* на платёж, т.к. их
+            // количество заранее не известно (может быть и 3, и 4 оплаты).
+            // admin.js разбирает этот JSON и рисует карточку на каждый платёж.
+            $paymentsForJs = array_map(function ($e) {
+                return [
+                    'fio'       => $e['fio'] ?? '',
+                    'phone'     => $e['phone'] ?? '',
+                    'date'      => $e['date'] ?? '',
+                    'tariff'    => $e['tariff'] ?? '',
+                    'paymentId' => $e['payment_id'] ?? '',
+                ];
+            }, $resolved['paidEntries']);
+        ?>
+        data-duplicate="1"
+        data-payments="<?= htmlspecialchars(json_encode($paymentsForJs, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
+        <?php endif; ?>
         <?php endif; ?>
       ><?= (int)$spotNum ?></button>
       <?php endforeach; ?>
     </div>
   </section>
   <?php endforeach; ?>
+
+  <section class="admin-footer-info">
+    <div class="info-block legend-block">
+      <h3>Обозначения цветов</h3>
+      <div class="legend-items">
+        <div class="legend-item"><span class="legend-swatch spot-paid"></span>Оплачено</div>
+        <div class="legend-item"><span class="legend-swatch spot-pending"></span>Ожидает оплаты / другой незавершённый статус</div>
+        <div class="legend-item"><span class="legend-swatch spot-empty"></span>Заявок нет</div>
+        <div class="legend-item"><span class="legend-swatch spot-duplicate"></span>Оплачено дважды и более — требует проверки</div>
+      </div>
+    </div>
+
+    <?php
+    // Тарифы берём из тех же переменных, что и главная страница сайта
+    // ($pricePerMonth, $levitanPremiumPrice, $levitanPremiumRanges,
+    // $levitanPremiumCount) — они заданы константами в private/config.php
+    // (раздел "ТАРИФЫ") и приходят сюда через includes/parkings-data.php,
+    // который подключает bootstrap.php. Значит если поменять цены в
+    // config.php на сервере, этот блок обновится сам, без правок кода.
+    ?>
+    <div class="info-block tariffs-block">
+      <h3>Текущие тарифы</h3>
+      <table class="tariffs-table mono">
+        <tr>
+          <td class="t-label">Базовый тариф (все парковки)</td>
+          <td class="t-value"><?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽/мес</td>
+        </tr>
+        <tr>
+          <td class="t-label">«Левитан», повышенная категория<br><span class="t-sub">места <?= levitanPremiumRangesText($levitanPremiumRanges) ?> (<?= (int)$levitanPremiumCount ?> мест)</span></td>
+          <td class="t-value"><?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽/мес</td>
+        </tr>
+      </table>
+    </div>
+  </section>
 
 </main>
 

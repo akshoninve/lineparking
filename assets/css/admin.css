@@ -12,6 +12,14 @@
   --yellow-dark:#c99e0e;
   --green:#2e9e5b;
   --red:#d6483f;
+  /* Отдельный цвет для мест с двойной оплатой (2+ заявки со статусом
+     "оплачено" за один месяц, см. resolveSpotDisplay() в
+     includes/log-reader.php) — сознательно НЕ красный (--red уже занят
+     под обычные ошибки форм/логина) и не жёлтый/зелёный (заняты под
+     "ожидает"/"оплачено"), чтобы дубль сразу бросался в глаза и не
+     путался с остальными статусами. */
+  --duplicate:#8b3fd1;
+  --duplicate-dark:#6e2ea8;
   --ink:#1a1c1e;
   --ink-soft:#5a5f63;
 }
@@ -58,6 +66,7 @@ body{
 .summary{font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;}
 .s-paid{color:#1e5c38;}
 .s-pending{color:#8a6a00;}
+.s-duplicate{color:var(--duplicate-dark);font-weight:700;}
 .s-empty{color:var(--ink-soft);}
 .s-total{color:var(--ink-soft);}
 
@@ -75,6 +84,12 @@ body{
 .spot-pending{background:var(--yellow);color:var(--asphalt);}
 .spot-empty{background:var(--concrete-2);color:var(--ink-soft);cursor:default;}
 .spot-empty:hover{transform:none;}
+/* Двойная оплата — фиолетовый + мигающая рамка, чтобы место было видно
+   с первого взгляда среди зелёных/жёлтых/серых соседей по сетке. */
+.spot-duplicate{
+  background:var(--duplicate);color:#fff;
+  box-shadow:0 0 0 2px var(--duplicate-dark);
+}
 
 /* ---------- DETAIL OVERLAY ---------- */
 /* ВАЖНО: display:flex ниже — правило автора страницы — перебивает
@@ -95,6 +110,7 @@ body{
 .detail-panel{
   background:var(--paper);border-radius:6px;padding:28px 26px 24px;max-width:420px;width:100%;
   position:relative;box-shadow:0 20px 50px rgba(0,0,0,.4);
+  max-height:80vh;overflow-y:auto;
 }
 .detail-close{
   position:absolute;top:14px;right:14px;border:none;background:none;font-size:22px;
@@ -111,6 +127,19 @@ body{
   text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;
 }
 .detail-value{text-align:right;word-break:break-word;}
+
+/* Предупреждение о дубле оплаты — верх карточки деталей */
+.detail-warning{
+  background:#f4ecfb;color:var(--duplicate-dark);border:1.5px solid var(--duplicate);
+  border-radius:4px;padding:12px 14px;font-size:13.5px;line-height:1.45;margin-bottom:16px;
+}
+/* Заголовок-разделитель между платежами внутри карточки дубля */
+.detail-payment-heading{
+  font-family:Arial, 'Helvetica Neue', sans-serif;text-transform:uppercase;letter-spacing:.04em;
+  font-size:12.5px;color:var(--duplicate-dark);font-weight:700;
+  margin:18px 0 4px;padding-top:14px;border-top:1px dashed var(--concrete-2);
+}
+.detail-payment-heading:first-of-type{margin-top:0;padding-top:0;border-top:none;}
 
 /* ---------- LOGIN ---------- */
 .admin-login-body{
@@ -141,6 +170,46 @@ body{
   background:var(--yellow);color:var(--asphalt);transition:background .15s ease;
 }
 .login-box .btn:hover{background:var(--yellow-dark);}
+
+/* ---------- ЛЕГЕНДА + ТАРИФЫ (низ панели) ---------- */
+.admin-footer-info{
+  display:grid;grid-template-columns:1fr 1fr;gap:24px;
+  margin-top:12px;padding-top:36px;border-top:1.5px dashed var(--concrete-2);
+}
+.info-block{
+  background:var(--paper);border-radius:6px;padding:22px 24px;
+  box-shadow:inset 0 0 0 1px var(--concrete-2);
+}
+.info-block h3{
+  font-family:Arial, 'Helvetica Neue', sans-serif;text-transform:uppercase;font-size:14px;
+  letter-spacing:.03em;margin:0 0 16px;color:var(--ink);
+}
+
+.legend-items{display:flex;flex-direction:column;gap:10px;}
+.legend-item{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink);}
+.legend-swatch{
+  width:20px;height:20px;border-radius:4px;flex-shrink:0;
+}
+/* Свотчи переиспользуют те же классы, что и сами места в сетке, —
+   так легенда никогда не разъедется с реальными цветами: поменяешь
+   цвет в .spot-paid/.spot-pending/.spot-empty/.spot-duplicate, и
+   легенда обновится сама, без отдельной правки. */
+.legend-swatch.spot-duplicate{box-shadow:inset 0 0 0 2px var(--duplicate-dark);}
+
+.tariffs-table{width:100%;border-collapse:collapse;}
+.tariffs-table tr{border-bottom:1px solid var(--concrete-2);}
+.tariffs-table tr:last-child{border-bottom:none;}
+.tariffs-table td{padding:12px 0;font-size:14px;vertical-align:top;}
+.tariffs-table td.t-label{color:var(--ink-soft);padding-right:16px;}
+.tariffs-table td.t-value{text-align:right;white-space:nowrap;font-weight:700;color:var(--ink);}
+.tariffs-table .t-sub{
+  display:inline-block;margin-top:3px;font-size:12px;color:var(--ink-soft);
+  text-transform:none;letter-spacing:normal;font-weight:400;
+}
+
+@media (max-width:760px){
+  .admin-footer-info{grid-template-columns:1fr;}
+}
 
 @media (max-width:640px){
   .spot-grid{grid-template-columns:repeat(auto-fill,minmax(38px,1fr));}
