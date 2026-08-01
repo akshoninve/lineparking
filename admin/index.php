@@ -9,6 +9,12 @@
  * ВСЕМ заявкам этого места за месяц, а не только по последней — это
  * нужно, чтобы отдельно показать место, оплаченное два раза и более
  * ("дубль оплаты", отдельный цвет в сетке), и увидеть оба платежа сразу.
+ *
+ * Ниже сетки — «Журнал событий»: хронологический список ВСЕХ заявок
+ * за тот же выбранный месяц (getEntriesForMonth() в log-reader.php),
+ * скрыт под кнопкой по умолчанию (как блок «Реквизиты» на index.php).
+ * Отдельного логина для него не нужно — вся страница уже защищена
+ * requireAdminLogin() выше.
  */
 require_once __DIR__ . '/../bootstrap.php';
 require_once __DIR__ . '/../includes/admin-auth.php';
@@ -25,6 +31,7 @@ if (!in_array($selectedMonth, $months, true)) {
 }
 
 $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth);
+$monthEntries      = getEntriesForMonth($entries, $selectedMonth);
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -134,6 +141,58 @@ $statusesByParking = getSpotStatusesForMonth($entries, $parkings, $selectedMonth
     </div>
   </section>
   <?php endforeach; ?>
+
+  <section class="log-section">
+    <button type="button" class="log-toggle" id="logToggle" aria-expanded="false" aria-controls="logCard">
+      <span class="log-toggle-text">Показать журнал событий</span>
+      <span class="chevron" aria-hidden="true">&#9662;</span>
+    </button>
+    <noscript><style>#logCard{display:block!important}#logToggle{display:none}</style></noscript>
+
+    <div class="log-card" id="logCard" hidden>
+      <div class="log-head">
+        <div class="log-title">Журнал заявок · <?= htmlspecialchars($selectedMonth, ENT_QUOTES, 'UTF-8') ?></div>
+        <div class="log-sub mono">Хронологический порядок — как в логе, все парковки вместе</div>
+      </div>
+      <?php if (empty($monthEntries)): ?>
+      <div class="log-empty">За «<?= htmlspecialchars($selectedMonth, ENT_QUOTES, 'UTF-8') ?>» заявок нет.</div>
+      <?php else: ?>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Дата заявки</th>
+              <th>ФИО</th>
+              <th>Телефон</th>
+              <th>Парковка</th>
+              <th>Место</th>
+              <th>Тариф</th>
+              <th>Статус</th>
+              <th>ID платежа</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($monthEntries as $e): ?>
+            <tr>
+              <td class="mono"><?= htmlspecialchars($e['date'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars($e['fio'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+              <td class="mono"><?= htmlspecialchars($e['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars($e['parking'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+              <td>№<?= htmlspecialchars((string)($e['spot'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars($e['tariff'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+              <td>
+                <?php $st = $e['status'] ?? ''; ?>
+                <span class="log-status <?= $st === 'оплачено' ? 's-paid' : 's-pending' ?>"><?= htmlspecialchars($st, ENT_QUOTES, 'UTF-8') ?></span>
+              </td>
+              <td class="mono"><?= htmlspecialchars($e['payment_id'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <?php endif; ?>
+    </div>
+  </section>
 
   <section class="admin-footer-info">
     <div class="info-block legend-block">

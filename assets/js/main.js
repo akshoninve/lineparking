@@ -2,7 +2,9 @@
  * assets/js/main.js
  * Фронтенд-скрипт главной страницы (index.php):
  *   1) кнопки «Копировать» в блоке реквизитов;
- *   2) автоматический пересчёт суммы к оплате в форме заявки.
+ *   2) автоматический пересчёт суммы к оплате в форме заявки;
+ *   3) автозаглавные буквы в ФИО;
+ *   4) автоформат телефона (+7 ...).
  *
  * Ожидает глобальный объект window.LP_CONFIG, который index.php
  * формирует маленьким инлайн-скриптом непосредственно перед
@@ -47,6 +49,55 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   });
+
+  // ---------- Автозаглавные буквы в ФИО ----------
+  // Заглавная буква после начала строки, пробела или дефиса
+  // (учитывает и «Иванов Иван Иванович», и «Петров-Водкин»).
+  // Курсор не прыгает, т.к. uppercase не меняет длину кириллической строки.
+  var fioEl = document.getElementById('fio');
+  if (fioEl) {
+    fioEl.addEventListener('input', function () {
+      var pos = fioEl.selectionStart;
+      var before = fioEl.value;
+      var after = before.replace(/(^|[\s-])([а-яёa-z])/gi, function (m, sep, ch) {
+        return sep + ch.toUpperCase();
+      });
+      if (after !== before) {
+        fioEl.value = after;
+        fioEl.setSelectionRange(pos, pos);
+      }
+    });
+  }
+
+  // ---------- Автоформат телефона (+7) ----------
+  // При фокусе на пустом поле сразу подставляет "+7 ". При вводе
+  // "8" в начале автоматически заменяется на "+7", формат — как
+  // в placeholder: +7 900 000-00-00.
+  var phoneEl = document.getElementById('phone');
+  if (phoneEl) {
+    phoneEl.addEventListener('focus', function () {
+      if (!phoneEl.value) {
+        phoneEl.value = '+7 ';
+        phoneEl.setSelectionRange(3, 3);
+      }
+    });
+    phoneEl.addEventListener('input', function () {
+      var digits = phoneEl.value.replace(/\D/g, '');
+      if (digits.charAt(0) === '8') digits = '7' + digits.slice(1);
+      if (digits && digits.charAt(0) !== '7') digits = '7' + digits;
+      digits = digits.slice(0, 11);
+
+      var formatted = '';
+      if (digits.length > 0) {
+        formatted = '+7';
+        if (digits.length > 1) formatted += ' ' + digits.slice(1, 4);
+        if (digits.length > 4) formatted += ' ' + digits.slice(4, 7);
+        if (digits.length > 7) formatted += '-' + digits.slice(7, 9);
+        if (digits.length > 9) formatted += '-' + digits.slice(9, 11);
+      }
+      phoneEl.value = formatted;
+    });
+  }
 
   // ---------- Пересчёт суммы в форме оплаты ----------
   var cfg = window.LP_CONFIG || {};

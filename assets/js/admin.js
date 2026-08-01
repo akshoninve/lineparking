@@ -11,12 +11,36 @@
  * Для него карточка вместо одной заявки показывает предупреждение и
  * список ВСЕХ оплаченных заявок (парсится из data-payments), чтобы сразу
  * было видно оба платежа и можно было решить, за какой возвращать деньги.
+ *
+ * Плюс — кнопка показать/скрыть «Журнал событий» (та же схема, что и
+ * блок «Реквизиты» на index.php: элемент скрыт атрибутом [hidden],
+ * кнопка его снимает/возвращает).
  */
 document.addEventListener('DOMContentLoaded', function () {
+
+  // ---------- Показать/скрыть журнал событий ----------
+  var logToggle = document.getElementById('logToggle');
+  var logCard = document.getElementById('logCard');
+  if (logToggle && logCard) {
+    var logToggleText = logToggle.querySelector('.log-toggle-text');
+    logToggle.addEventListener('click', function () {
+      var isHidden = logCard.hasAttribute('hidden');
+      if (isHidden) {
+        logCard.removeAttribute('hidden');
+        logToggle.setAttribute('aria-expanded', 'true');
+        if (logToggleText) logToggleText.textContent = 'Скрыть журнал событий';
+      } else {
+        logCard.setAttribute('hidden', '');
+        logToggle.setAttribute('aria-expanded', 'false');
+        if (logToggleText) logToggleText.textContent = 'Показать журнал событий';
+      }
+    });
+  }
+
   var overlay = document.getElementById('detailOverlay');
   var body = document.getElementById('detailBody');
   var closeBtn = document.getElementById('detailClose');
-  if (!overlay || !body || !closeBtn) return;
+  if (!overlay || !body || !closeBtn) return; // на этой странице элементы есть всегда, проверка — на случай правок вёрстки
 
   function addRow(label, value) {
     var row = document.createElement('div');

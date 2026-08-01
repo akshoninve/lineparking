@@ -91,6 +91,56 @@ body{
   box-shadow:0 0 0 2px var(--duplicate-dark);
 }
 
+/* ---------- ЖУРНАЛ СОБЫТИЙ ---------- */
+/* Тот же паттерн, что и блок «Реквизиты» на главном сайте
+   (assets/css/style.css .req-toggle/.req-card): элемент скрыт [hidden]
+   по умолчанию, кнопка снимает/возвращает атрибут через admin.js. */
+.log-section{margin-bottom:36px;}
+.log-toggle{
+  display:inline-flex;align-items:center;gap:10px;
+  font-family:Arial, 'Helvetica Neue', sans-serif;text-transform:uppercase;letter-spacing:.05em;
+  font-size:14px;padding:13px 22px;border-radius:4px;
+  background:var(--asphalt);color:var(--paper);border:2px solid var(--asphalt);
+  cursor:pointer;margin-bottom:16px;
+  transition:background .15s ease, transform .15s ease;
+}
+.log-toggle:hover{background:var(--asphalt-2);transform:translateY(-1px);}
+.log-toggle .chevron{font-size:12px;transition:transform .2s ease;}
+.log-toggle[aria-expanded="true"] .chevron{transform:rotate(180deg);}
+
+.log-card{
+  background:var(--paper);border-radius:6px;overflow:hidden;
+  box-shadow:inset 0 0 0 1px var(--concrete-2);
+}
+.log-head{
+  padding:18px 22px;border-bottom:1px solid var(--concrete-2);
+  display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;
+}
+.log-title{font-family:Arial, 'Helvetica Neue', sans-serif;text-transform:uppercase;font-size:15px;letter-spacing:.02em;}
+.log-sub{font-size:11.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+.log-empty{padding:20px 22px;color:var(--ink-soft);font-size:14px;}
+
+.log-table-wrap{overflow-x:auto;}
+.log-table{width:100%;border-collapse:collapse;font-size:13.5px;white-space:nowrap;}
+.log-table th, .log-table td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--concrete-2);}
+.log-table th{
+  font-family:ui-monospace, Consolas, 'Liberation Mono', Menlo, monospace;font-size:11px;
+  text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);background:#f4f2ec;
+  position:sticky;top:0;
+}
+.log-table tbody tr:hover{background:#f7f5f0;}
+.log-table tbody tr:last-child td{border-bottom:none;}
+.log-status{
+  display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:700;
+}
+.log-status.s-paid{background:#e6f4eb;color:#1e5c38;}
+.log-status.s-pending{background:#fdf3d6;color:#8a6a00;}
+
+@media (max-width:700px){
+  .log-table{font-size:12.5px;}
+  .log-table th, .log-table td{padding:8px 10px;}
+}
+
 /* ---------- DETAIL OVERLAY ---------- */
 /* ВАЖНО: display:flex ниже — правило автора страницы — перебивает
    стандартное поведение атрибута [hidden] (который в UA-стилях

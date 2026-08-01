@@ -52,13 +52,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
     if (mb_strlen($submitted['fio']) < 3) {
         $errors['fio'] = 'Укажите фамилию, имя и отчество полностью.';
     }
-    if (!preg_match('/^[\d\s\+\-\(\)]{10,20}$/u', $submitted['phone'])) {
+
+    // Проверяем телефон по количеству цифр, а не по формату записи —
+    // так номер проходит независимо от того, как именно он введён:
+    // "+7 900 000-00-00", "8(900)000-00-00", "79000000000" и т.п.
+    // Российский номер — 10 цифр без кода страны или 11 цифр с ним
+    // (7XXXXXXXXXX / 8XXXXXXXXXX), поэтому допустимый диапазон 10–11.
+    $phoneDigits = preg_replace('/\D/', '', $submitted['phone']);
+    if (strlen($phoneDigits) < 10 || strlen($phoneDigits) > 11) {
         $errors['phone'] = 'Проверьте номер телефона.';
     }
+
     if (!array_key_exists($submitted['parking'], $parkings)) {
         $errors['parking'] = 'Выберите парковку.';
     }
-    if ($submitted['spot'] === '' || !preg_match('/^\d{1,4}$/', $submitted['spot'])) {
+    // Номер машино-места — 1–3 цифры (макс. вместимость парковок сейчас
+    // 132 места, см. includes/parkings-data.php), было 1–4.
+    if ($submitted['spot'] === '' || !preg_match('/^\d{1,3}$/', $submitted['spot'])) {
         $errors['spot'] = 'Укажите номер машино-места (только цифры).';
     }
     if (!in_array($submitted['month'], $months, true)) {
