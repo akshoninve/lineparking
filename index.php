@@ -93,7 +93,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
       <div class="price-body">
         <h3>Стоимость и как всё устроено</h3>
         <ul>
-          <li><strong>Что входит:</strong> закреплённое машино-место на охраняемой территории, круглосуточный доступ.</li>
+          <li><strong>Что входит в стоимость:</strong> закреплённое машино-место на паркинге, круглосуточный доступ, видеонаблюдение, уборка территории от снега.</li>
           <li><strong>Оплата:</strong> фиксированная — <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽ в месяц, без скрытых платежей. Исключение — парковка «Левитан»: машино-места <?= levitanPremiumRangesText($levitanPremiumRanges) ?> (<?= $levitanPremiumCount ?> мест повышенной категории) стоят <?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽ в месяц, остальные места на этой парковке — по базовой цене <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽. Тариф определяется автоматически по номеру места. Оплата производится авансом за предстоящий месяц.</li>
           <li><strong>Как получить доступ:</strong> после поступления оплаты место активируется в системе, и в течение 1 рабочего дня открывается доступ по телефону: звонок на шлагбаум открывает его.</li>
         </ul>
@@ -267,7 +267,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
 
 <footer>
   <div class="wrap foot-grid">
-    <div class="brand">ЛайнПаркинг · г. Видное</div>
+    <div class="brand">ЛайнПаркинг</div>
     <div><a href="tel:<?= COMPANY_PHONE_HREF ?>"><?= COMPANY_PHONE_DISPLAY ?></a> &nbsp;·&nbsp; <a href="mailto:<?= COMPANY_EMAIL ?>"><?= COMPANY_EMAIL ?></a> &nbsp;·&nbsp; <a href="oferta.php" target="_blank" rel="noopener">Публичная оферта</a></div>
     <div>&copy; <?= date('Y') ?> <?= COMPANY_NAME_SHORT ?></div>
   </div>
