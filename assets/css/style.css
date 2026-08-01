@@ -61,6 +61,10 @@
     display:flex;align-items:center;gap:10px;
     font-family:Arial, 'Helvetica Neue', sans-serif;font-size:20px;font-weight:600;letter-spacing:0.03em;
   }
+  a.brand{
+    text-decoration:none;
+    color:inherit;
+  }
   .brand .p-sign{
     width:34px;height:34px;border-radius:3px;background:var(--yellow);color:var(--asphalt);
     display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;
@@ -111,6 +115,16 @@
   .btn-primary:hover{background:var(--yellow-dark);}
   .btn-outline{background:transparent;color:var(--paper);border-color:#4a4e52;}
   .btn-outline:hover{border-color:var(--yellow);color:var(--yellow);}
+
+  /* Кнопки в hero (‎«Оплатить машино-место» / «Реквизиты для оплаты»)
+     раньше были inline-block без общей ширины — из-за разной длины
+     текста получались заметно разного размера. Задаём обеим одну и
+     ту же min-width и центрируем текст, так они всегда выглядят
+     одинаковыми, независимо от длины подписи. */
+  .hero-actions .btn{
+    min-width:260px;
+    text-align:center;
+  }
 
   /* Barrier graphic */
   .barrier{
@@ -422,4 +436,15 @@
     }
     .req-card .req-head{padding:20px 20px;}
     .req-card .req-head .co{font-size:17px;}
+  }
+
+  /* На совсем узких экранах (мобильные) фиксированная min-width у
+     кнопок в hero-actions может не помещаться по ширине — тогда
+     даём им расти на всю ширину блока, сохраняя одинаковый размер
+     между собой (просто оба на 100%). */
+  @media (max-width:420px){
+    .hero-actions .btn{
+      min-width:0;
+      width:100%;
+    }
   }
