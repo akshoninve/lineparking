@@ -3,8 +3,17 @@
  * includes/parkings-data.php
  * Справочные данные проекта: список парковок, месяцы для формы, тарифы.
  *
- * Меняете список парковок, вместимость или цены — правите ТОЛЬКО этот
- * файл, index.php и oferta.php трогать не нужно.
+ * ЦЕНЫ (PRICE_PER_MONTH, LEVITAN_PREMIUM_PRICE, LEVITAN_PREMIUM_RANGES)
+ * сюда НЕ прописываются — они заданы константами в private/config.php
+ * (раздел "ТАРИФЫ"), этот файл их только читает. Если нужно поменять
+ * стоимость или список премиальных мест — правьте config.php на
+ * сервере, коммитить/заливать код заново не нужно.
+ *
+ * Список парковок, их вместимость и месяцы для формы — это
+ * структурные данные проекта (не "настройки магазина"), поэтому
+ * остаются здесь, под git, как и раньше. Меняете список парковок
+ * или вместимость — правите ТОЛЬКО этот файл, index.php и oferta.php
+ * трогать не нужно.
  */
 
 // key => [Название для отображения, вместимость (кол-во мест)]
@@ -60,11 +69,11 @@ $currentMonthYear = $monthNames[(int)date('n') - 1] . ' ' . date('Y');
 $defaultPaymentMonthObj = new DateTime('first day of next month');
 $defaultPaymentMonth = $monthNames[(int)$defaultPaymentMonthObj->format('n') - 1] . ' ' . $defaultPaymentMonthObj->format('Y');
 
-$pricePerMonth       = 10000; // руб/месяц — базовый тариф на все парковки
-$levitanPremiumPrice = 12000; // руб/месяц — повышенный тариф (часть мест на «Левитане»)
-
-// Машино-места повышенной категории на парковке «Левитан»
-$levitanPremiumRanges = [[1, 8], [54, 66], [124, 132]];
+// Цены — читаются из констант private/config.php (раздел "ТАРИФЫ"),
+// НЕ задаются здесь. См. комментарий в шапке файла.
+$pricePerMonth        = PRICE_PER_MONTH;        // руб/месяц — базовый тариф на все парковки
+$levitanPremiumPrice   = LEVITAN_PREMIUM_PRICE;  // руб/месяц — повышенный тариф (часть мест на «Левитане»)
+$levitanPremiumRanges  = LEVITAN_PREMIUM_RANGES; // машино-места повышенной категории на парковке «Левитан»
 
 // Сколько всего мест попадает в повышенную категорию (для текста на странице)
 $levitanPremiumCount = array_sum(array_map(fn($r) => $r[1] - $r[0] + 1, $levitanPremiumRanges));
