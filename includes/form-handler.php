@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
     if (empty($errors)) {
         $isPremium   = $submitted['parking'] === 'levitan' && isLevitanPremiumSpot($submitted['spot'], $levitanPremiumRanges);
         $amount      = $isPremium ? $levitanPremiumPrice : $pricePerMonth;
-        $tariffText  = number_format($amount, 0, ',', ' ') . ' ₽' . ($isPremium ? ' (место повышенной категории)' : '');
+        $tariffText  = number_format($amount, 0, ',', ' ') . ' ₽';
         $parkingName = $parkings[$submitted['parking']][0];
 
         // Готовим номер счёта (InvId) и формируем платёжную ссылку
