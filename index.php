@@ -30,7 +30,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЛАЙНПАРКИНГ — паркинги в Видном</title>
-<meta name="description" content="Парковки «Левитан», «Купелинка» в г. Видное. Абонемент от 10 000 ₽/месяц. Оплата парковочного места онлайн."><!-- «Нестеров» временно скрыта, см. includes/parkings-data.php — вернуть упоминание сюда вместе с ней -->
+<meta name="description" content="Парковки «Левитан», «Купелинка» в г. Видное. Абонемент от <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽/месяц. Оплата парковочного места онлайн."><!-- «Нестеров» временно скрыта, см. includes/parkings-data.php — вернуть упоминание сюда вместе с ней -->
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
@@ -70,7 +70,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
         <div class="lot-main">
           <div class="lot-name"><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></div>
           <?php if ($key === 'levitan'): ?>
-          <div class="lot-price">10 000 – 12 000 ₽/мес</div>
+          <div class="lot-price"><?= number_format($pricePerMonth, 0, ',', ' ') ?> – <?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽/мес</div>
           <div class="lot-foot">Оплата — ежемесячно, до 1-го числа. М/м <?= levitanPremiumRangesText($levitanPremiumRanges) ?> — <?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽/мес, остальные места — <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽/мес.</div>
           <?php else: ?>
           <div class="lot-price"><?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽/мес</div>
@@ -183,7 +183,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
           <div class="submit-row">
             <button type="submit" name="send_request" value="1" class="btn btn-primary" id="payButton">Перейти к оплате</button>
           </div>
-          <div class="fine-print">Услуга — предоставление машино-места в аренду на 1 календарный месяц. Стоимость — от 10 000 ₽ (для мест <?= levitanPremiumRangesText($levitanPremiumRanges) ?> на парковке «Левитан» — 12 000 ₽/мес), сумма рассчитывается автоматически по номеру места. После нажатия кнопки вы попадёте на защищённую страницу оплаты картой.</div>
+          <div class="fine-print">Услуга — предоставление машино-места в аренду на 1 календарный месяц. Стоимость — от <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽ (для мест <?= levitanPremiumRangesText($levitanPremiumRanges) ?> на парковке «Левитан» — <?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽/мес), сумма рассчитывается автоматически по номеру места. После нажатия кнопки вы попадёте на защищённую страницу оплаты картой.</div>
         </form>
       </div>
     </div>

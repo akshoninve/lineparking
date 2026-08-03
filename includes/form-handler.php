@@ -62,6 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
     if (strlen($phoneDigits) < 10 || strlen($phoneDigits) > 11) {
         $errors['phone'] = 'Проверьте номер телефона.';
     }
+    // Нормализованный телефон для записи в лог/письмо — без пробелов
+    // и дефисов, в формате "+79026001338" (см. functions.php).
+    // Пользователю в поле формы при ошибке всё равно показываем
+    // $submitted['phone'] как он его ввёл — это не меняем.
+    $normalizedPhone = normalizeRussianPhone($submitted['phone']);
 
     if (!array_key_exists($submitted['parking'], $parkings)) {
         $errors['parking'] = 'Выберите парковку.';
@@ -99,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
         $entry = [
             'date'       => date('Y-m-d H:i:s'),
             'fio'        => $submitted['fio'],
-            'phone'      => $submitted['phone'],
+            'phone'      => $normalizedPhone,
             'parking'    => $parkingName,
             'spot'       => $submitted['spot'],
             'month'      => $submitted['month'],

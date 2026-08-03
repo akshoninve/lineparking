@@ -175,6 +175,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
               <th>Телефон</th>
               <th>Парковка</th>
               <th>Место</th>
+              <th>Период</th>
               <th>Тариф</th>
               <th>Статус</th>
               <th>ID платежа</th>
@@ -188,6 +189,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
               <td class="mono"><?= htmlspecialchars($e['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars($e['parking'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td>№<?= htmlspecialchars((string)($e['spot'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars($e['month'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars($e['tariff'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td>
                 <?php $st = $e['status'] ?? ''; ?>

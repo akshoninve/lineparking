@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     addRow('Парковка', btn.dataset.parking);
     addRow('Место', '№' + btn.dataset.spot);
-    addRow('Месяц', btn.dataset.month);
+    addRow('Период', btn.dataset.month);
 
     var payments = [];
     try {
@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     addRow('Парковка', btn.dataset.parking);
     addRow('Место', '№' + btn.dataset.spot);
-    addRow('Месяц', btn.dataset.month);
+    addRow('Период', btn.dataset.month);
     addRow('Статус', btn.dataset.status);
     addRow('Тариф', btn.dataset.tariff);
     addRow('ФИО', btn.dataset.fio);
