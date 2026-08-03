@@ -4,8 +4,8 @@
  * Интеграция с платёжным шлюзом Robokassa (https://robokassa.ru).
  *
  * Ключи ROBOKASSA_MERCHANT_LOGIN / ROBOKASSA_PASSWORD1 / ROBOKASSA_PASSWORD2 /
- * ROBOKASSA_IS_TEST берутся из config.php, который лежит ВЫШЕ public_html
- * (см. подробный комментарий в самом config.php).
+ * ROBOKASSA_IS_TEST / ROBOKASSA_SNO берутся из config.php, который лежит
+ * ВЫШЕ public_html (см. подробный комментарий в самом config.php).
  *
  * В отличие от ЮKassa, Robokassa не требует похода в её API, чтобы
  * "создать" платёж: платёжная ссылка формируется полностью локально —
@@ -13,7 +13,26 @@
  * набором GET-параметров и подписью (SignatureValue), которую считаем
  * сами по формуле из документации Robokassa ("Интерфейс оплаты" →
  * "Сборка подписи SignatureValue"):
- *   MD5(MerchantLogin:OutSum:InvId:Пароль#1)
+ *   MD5(MerchantLogin:OutSum:InvId:Receipt:Пароль#1)
+ *
+ * ==================== ФИСКАЛИЗАЦИЯ (54-ФЗ) ====================
+ * У магазина в личном кабинете Robokassa подключена схема "Фискализация →
+ * Самостоятельное" — это значит, что состав чека (номенклатуру) формирует
+ * САМ сайт и передаёт его в параметре Receipt при КАЖДОМ запросе на
+ * оплату. Без этого параметра в боевом режиме страница оплаты зависает
+ * (Robokassa не может сформировать фискальный чек) — см. buildRobokassaReceipt()
+ * ниже. В тестовом режиме (ROBOKASSA_IS_TEST = true) это не проявляется,
+ * поэтому проблема обнаруживается только при переходе в боевой режим.
+ *
+ * Система налогообложения (параметр sno в чеке) берётся из константы
+ * ROBOKASSA_SNO в config.php — она должна ТОЧНО совпадать с тем, что
+ * указано в настройках кассы/ОФД в личном кабинете Robokassa (раздел
+ * "Фискализация"). Сейчас используется 'usn_income_outcome' (УСН
+ * "доходы минус расходы"). Компании на УСН, как правило, не являются
+ * плательщиками НДС, поэтому ставка налога по позиции чека (tax) — 'none'
+ * (не путать со ставкой самого УСН 15%, которая относится к налогу на
+ * прибыль компании в целом, а не к НДС на конкретный товар/услугу).
+ * =================================================================
  *
  * ==================== КАК ПОДКЛЮЧИТЬ ОПЛАТУ ====================
  * 1. Зарегистрируйте магазин в личном кабинете Robokassa и укажите
@@ -39,6 +58,7 @@
  *        define('ROBOKASSA_PASSWORD1', 'тестовый_или_боевой_пароль_1');
  *        define('ROBOKASSA_PASSWORD2', 'тестовый_или_боевой_пароль_2');
  *        define('ROBOKASSA_IS_TEST', true); // true — тестовый режим, false — боевой
+ *        define('ROBOKASSA_SNO', 'usn_income_outcome'); // система налогообложения для чеков
  * 4. Больше ничего менять не нужно — форма на сайте сама начнёт
  *    переводить клиента на страницу оплаты Robokassa.
  *
@@ -101,6 +121,47 @@ function formatRobokassaOutSum($amount): string {
 }
 
 /**
+ * Формирует состав чека (параметр Receipt) для одной заявки — по
+ * требованиям 54-ФЗ Robokassa нужен в каждом запросе на оплату, т.к.
+ * у магазина подключена схема фискализации "Самостоятельное" (чек
+ * формирует сайт, а не облачная касса Robokassa).
+ *
+ * Пока в проекте всегда ровно одна позиция в чеке (одна услуга —
+ * аренда одного машино-места за один месяц), поэтому items — массив
+ * из одного элемента. Если в будущем понадобится продавать несколько
+ * позиций в одной заявке — этот момент придётся переработать.
+ *
+ * sno берётся из константы ROBOKASSA_SNO (config.php) — должна точно
+ * совпадать с системой налогообложения, указанной в настройках кассы/
+ * ОФД в личном кабинете Robokassa (раздел "Фискализация").
+ *
+ * tax = 'none': компания на УСН не является плательщиком НДС по
+ * умолчанию, поэтому ставка налога на позицию — "без НДС". Если это
+ * когда-либо перестанет быть верным (например, компания начнёт платить
+ * НДС по отдельным операциям) — значение нужно будет пересмотреть.
+ *
+ * @param string     $description Название позиции в чеке (например
+ *                                 "Машино-место №36, Парковка «Левитан», Сентябрь 2026")
+ * @param float|int  $amount      Сумма позиции в рублях
+ * @return array Массив, готовый к json_encode() в параметр Receipt
+ */
+function buildRobokassaReceipt(string $description, $amount): array {
+    return [
+        'sno'   => defined('ROBOKASSA_SNO') ? ROBOKASSA_SNO : 'usn_income_outcome',
+        'items' => [
+            [
+                'name'           => mb_substr($description, 0, 128),
+                'quantity'       => 1,
+                'sum'            => (float)formatRobokassaOutSum($amount),
+                'tax'            => 'none',
+                'payment_method' => 'full_payment',
+                'payment_object' => 'service',
+            ],
+        ],
+    ];
+}
+
+/**
  * Формирует платёжную ссылку Robokassa и возвращает массив
  * ['id' => <InvId как строка>, 'url' => <ссылка на оплату>],
  * либо null — если ключи ещё не подключены.
@@ -111,7 +172,9 @@ function formatRobokassaOutSum($amount): string {
  * по ссылке.
  *
  * @param float  $amount      Сумма к оплате в рублях
- * @param string $description Описание платежа (видно клиенту и в кабинете Robokassa)
+ * @param string $description Описание платежа (видно клиенту, в кабинете
+ *                             Robokassa и как наименование позиции в чеке, см.
+ *                             buildRobokassaReceipt())
  * @param int    $invId       Номер счёта (см. nextRobokassaInvId())
  * @return array{id:string,url:string}|null
  */
@@ -120,14 +183,22 @@ function createRobokassaPayment($amount, $description, $invId) {
         return null;
     }
 
-    $outSum = formatRobokassaOutSum($amount);
-    $signature = md5(ROBOKASSA_MERCHANT_LOGIN . ':' . $outSum . ':' . $invId . ':' . ROBOKASSA_PASSWORD1);
+    $outSum  = formatRobokassaOutSum($amount);
+    $receipt = json_encode(buildRobokassaReceipt($description, $amount), JSON_UNESCAPED_UNICODE);
+
+    // Receipt входит в строку подписи МЕЖДУ InvId и Пароль#1, в виде
+    // "сырого" JSON (БЕЗ urlencode) — см. документацию Robokassa,
+    // раздел "Интерфейс оплаты" → "Сборка подписи SignatureValue".
+    // В сам URL этот же JSON пойдёт уже закодированным — это сделает
+    // http_build_query() ниже, отдельно кодировать здесь не нужно.
+    $signature = md5(ROBOKASSA_MERCHANT_LOGIN . ':' . $outSum . ':' . $invId . ':' . $receipt . ':' . ROBOKASSA_PASSWORD1);
 
     $params = [
         'MerchantLogin'  => ROBOKASSA_MERCHANT_LOGIN,
         'OutSum'         => $outSum,
         'InvId'          => $invId,
         'Description'    => mb_substr($description, 0, 100),
+        'Receipt'        => $receipt,
         'SignatureValue' => $signature,
         'Culture'        => 'ru',
         'Encoding'       => 'utf-8',
@@ -156,6 +227,13 @@ function createRobokassaPayment($amount, $description, $invId) {
  * Сравнение регистронезависимое (Robokassa может прислать подпись
  * в любом регистре) и через hash_equals — чтобы не давать наводок
  * по времени сравнения.
+ *
+ * ВАЖНО: если в будущем в личном кабинете Robokassa включат опцию
+ * присылать Receipt также и в ResultURL-уведомлении — формулу здесь
+ * придётся дополнить (MD5(OutSum:InvId:Receipt:Пароль#2)) по аналогии
+ * с createRobokassaPayment(). Пока это не подтверждено фактическим
+ * содержимым уведомлений (см. private/logs/robokassa-result-*.log),
+ * трогать эту функцию не нужно.
  */
 function robokassaVerifyResultSignature($outSum, $invId, $signatureValue): bool {
     if (!defined('ROBOKASSA_PASSWORD2') || ROBOKASSA_PASSWORD2 === '') {
