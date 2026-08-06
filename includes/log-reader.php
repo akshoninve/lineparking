@@ -222,12 +222,24 @@ function resolveSpotDisplay(array $spotEntries): array {
 /**
  * Короткая сводка по парковке за месяц: сколько мест оплачено /
  * ожидает оплаты (или другой незавершённый статус) / без заявок вовсе /
- * оплачено дважды и более (см. resolveSpotDisplay()).
+ * оплачено дважды и более (см. resolveSpotDisplay()), а также выручка.
+ *
+ * 'revenue' — сумма amount по ВСЕМ заявкам со статусом "оплачено" за
+ * этот месяц по этой парковке, включая места с двойной оплатой
+ * (resolveSpotDisplay() для них тоже отдаёт paidEntries — оба/все
+ * платежа), т.к. это реально поступившие деньги, а не расчётная
+ * стоимость мест. Поэтому revenue может не совпадать с
+ * paid * pricePerMonth, если есть дубли оплаты — это ожидаемо и
+ * как раз сигнал, ради которого дубли выделены отдельным цветом.
  */
 function summarizeParkingStatuses(array $spotStatuses): array {
-    $summary = ['paid' => 0, 'pending' => 0, 'empty' => 0, 'duplicate' => 0, 'total' => count($spotStatuses)];
+    $summary = ['paid' => 0, 'pending' => 0, 'empty' => 0, 'duplicate' => 0, 'total' => count($spotStatuses), 'revenue' => 0];
     foreach ($spotStatuses as $spotEntries) {
-        $summary[resolveSpotDisplay($spotEntries)['state']]++;
+        $resolved = resolveSpotDisplay($spotEntries);
+        $summary[$resolved['state']]++;
+        foreach ($resolved['paidEntries'] as $paidEntry) {
+            $summary['revenue'] += (float)($paidEntry['amount'] ?? 0);
+        }
     }
     return $summary;
 }

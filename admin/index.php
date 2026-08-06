@@ -87,6 +87,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
         <?php endif; ?>
         <span class="s-empty"><?= (int)$summary['empty'] ?> без заявки</span>
         <span class="s-total">из <?= (int)$summary['total'] ?></span>
+        <span class="s-revenue"><?= number_format((float)$summary['revenue'], 0, ',', ' ') ?> ₽ выручка</span>
       </div>
     </div>
     <div class="spot-grid">

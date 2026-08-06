@@ -69,6 +69,7 @@ body{
 .s-duplicate{color:var(--duplicate-dark);font-weight:700;}
 .s-empty{color:var(--ink-soft);}
 .s-total{color:var(--ink-soft);}
+.s-revenue{color:var(--ink);font-weight:700;}
 
 .spot-grid{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));gap:6px;
