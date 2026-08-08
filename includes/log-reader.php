@@ -101,6 +101,33 @@ function loadZayavkiLog(?string $year = null): array {
 }
 
 /**
+ * Проверяет, относится ли заявка к запрошенному месяцу ("Месяц Год",
+ * например "Октябрь 2026").
+ *
+ * Для обычной помесячной оплаты это просто entry['month'] === $month.
+ *
+ * Для оплаты за несколько дней, которая пересекает границу
+ * календарного месяца (includes/form-handler.php,
+ * includes/functions.php::monthLabelsForPeriod()), заявка физически
+ * ОДНА (один payment_id, одна строка в логе), но должна "занимать"
+ * место сразу во ВСЕХ месяцах, которые затрагивает период — иначе,
+ * скажем, октябрьская часть периода "28 сентября – 3 октября" была бы
+ * не видна в шахматке за октябрь, и место могло бы уйти второй заявке.
+ * Поэтому такие заявки дополнительно несут entry['months'] — список всех
+ * затронутых месяцев, — и здесь проверяется вхождение в этот список.
+ *
+ * entry['months'] отсутствует у обычных (не дневных) и у старых записей
+ * лога, сделанных до появления этой фичи — для них просто сравниваем
+ * entry['month'] напрямую, как и раньше.
+ */
+function entryCoversMonth(array $entry, string $month): bool {
+    if (isset($entry['months']) && is_array($entry['months'])) {
+        return in_array($month, $entry['months'], true);
+    }
+    return ($entry['month'] ?? null) === $month;
+}
+
+/**
  * Карта "отображаемое имя парковки" => "ключ парковки" ('levitan' и т.д.),
  * т.к. в логе хранится имя (form-handler.php пишет $parkings[$key][0]),
  * а не сам ключ.
@@ -145,7 +172,7 @@ function getSpotStatusesForMonth(array $entries, array $parkings, string $month)
     }
 
     foreach ($entries as $entry) {
-        if (($entry['month'] ?? null) !== $month) {
+        if (!entryCoversMonth($entry, $month)) {
             continue;
         }
         $key = $nameToKey[$entry['parking'] ?? ''] ?? null;
@@ -164,11 +191,12 @@ function getSpotStatusesForMonth(array $entries, array $parkings, string $month)
 
 /**
  * Определяет, как показать одно машино-место в админке, на основе
- * СПИСКА всех его заявок за месяц (см. getSpotStatusesForMonth()).
+ * СПИСКА всех его заявок за месяц (см. getSpotStatusesForMonth()) и
+ * самого запрошенного месяца.
  *
  * Возвращает:
  *   [
- *     'state'       => 'empty' | 'paid' | 'pending' | 'duplicate',
+ *     'state'       => 'empty' | 'paid' | 'paid-period' | 'pending' | 'duplicate',
  *     'entry'       => заявка для карточки деталей | null,
  *     'paidEntries' => все заявки со статусом "оплачено" (для 'duplicate'),
  *   ]
@@ -180,6 +208,17 @@ function getSpotStatusesForMonth(array $entries, array $parkings, string $month)
  * заявка и т.п.), которую стоит проверить вручную и, возможно,
  * вернуть деньги за лишний платёж.
  *
+ * 'paid' vs 'paid-period' — оба означают "оплачено", различие чисто
+ * по СПОСОБУ оплаты, не по тому, в каком месяце возник счёт:
+ *   'paid'        — обычная помесячная оплата (entry['period'] пусто);
+ *   'paid-period' — оплата произвольными датами (entry['period']
+ *                    заполнено, см. includes/form-handler.php) — сюда
+ *                    попадает и месяц, где стоит счёт, и попутные
+ *                    месяцы того же периода, если он пересекает
+ *                    границу месяца: цвет в шахматке одинаковый для
+ *                    всех месяцев одного такого платежа, отличается
+ *                    только от обычной помесячной оплаты.
+ *
  * ВАЖНО (исправлено): если оплаченная заявка РОВНО ОДНА, место
  * считается оплаченным — вне зависимости от того, создавались ли
  * позже другие, неоплаченные заявки на то же место и месяц. Раньше
@@ -190,7 +229,7 @@ function getSpotStatusesForMonth(array $entries, array $parkings, string $month)
  * оплаты", хотя деньги фактически были получены. Оплата — необратимый
  * факт, и более поздняя незавершённая заявка не должна его скрывать.
  */
-function resolveSpotDisplay(array $spotEntries): array {
+function resolveSpotDisplay(array $spotEntries, string $month): array {
     if (empty($spotEntries)) {
         return ['state' => 'empty', 'entry' => null, 'paidEntries' => []];
     }
@@ -209,7 +248,12 @@ function resolveSpotDisplay(array $spotEntries): array {
     }
 
     if (count($paidEntries) === 1) {
-        return ['state' => 'paid', 'entry' => $paidEntries[0], 'paidEntries' => $paidEntries];
+        $isDatedPayment = !empty($paidEntries[0]['period']);
+        return [
+            'state'       => $isDatedPayment ? 'paid-period' : 'paid',
+            'entry'       => $paidEntries[0],
+            'paidEntries' => $paidEntries,
+        ];
     }
 
     // Оплаченных заявок нет вовсе — показываем статус последней по
@@ -220,25 +264,34 @@ function resolveSpotDisplay(array $spotEntries): array {
 }
 
 /**
- * Короткая сводка по парковке за месяц: сколько мест оплачено /
- * ожидает оплаты (или другой незавершённый статус) / без заявок вовсе /
- * оплачено дважды и более (см. resolveSpotDisplay()), а также выручка.
+ * Короткая сводка по парковке за месяц: сколько мест оплачено помесячно /
+ * оплачено произвольными датами / ожидает оплаты (или другой
+ * незавершённый статус) / без заявок вовсе / оплачено дважды и более
+ * (см. resolveSpotDisplay()), а также выручка.
  *
- * 'revenue' — сумма amount по ВСЕМ заявкам со статусом "оплачено" за
- * этот месяц по этой парковке, включая места с двойной оплатой
- * (resolveSpotDisplay() для них тоже отдаёт paidEntries — оба/все
- * платежа), т.к. это реально поступившие деньги, а не расчётная
- * стоимость мест. Поэтому revenue может не совпадать с
- * paid * pricePerMonth, если есть дубли оплаты — это ожидаемо и
- * как раз сигнал, ради которого дубли выделены отдельным цветом.
+ * 'revenue' — сумма amount по заявкам, у которых ИМЕННО ЭТОТ месяц —
+ * "родной" (entry['month'], первый месяц периода — см.
+ * includes/form-handler.php), плюс все заявки в 'duplicate' (это
+ * реально поступившие деньги, а не расчётная стоимость мест). Попутные
+ * месяцы многомесячного периода в revenue НЕ засчитываются — иначе
+ * один и тот же платёж прибавлялся бы к выручке в каждом затронутом
+ * месяце (например, платёж на 4 месяца утроил/учетверил бы выручку).
+ * Поэтому revenue может не совпадать с paid * pricePerMonth, если есть
+ * дубли оплаты или многомесячные периоды — это ожидаемо.
  */
-function summarizeParkingStatuses(array $spotStatuses): array {
-    $summary = ['paid' => 0, 'pending' => 0, 'empty' => 0, 'duplicate' => 0, 'total' => count($spotStatuses), 'revenue' => 0];
+function summarizeParkingStatuses(array $spotStatuses, string $month): array {
+    $summary = ['paid' => 0, 'paidPeriod' => 0, 'pending' => 0, 'empty' => 0, 'duplicate' => 0, 'total' => count($spotStatuses), 'revenue' => 0];
     foreach ($spotStatuses as $spotEntries) {
-        $resolved = resolveSpotDisplay($spotEntries);
-        $summary[$resolved['state']]++;
+        $resolved = resolveSpotDisplay($spotEntries, $month);
+        if ($resolved['state'] === 'paid-period') {
+            $summary['paidPeriod']++;
+        } else {
+            $summary[$resolved['state']]++;
+        }
         foreach ($resolved['paidEntries'] as $paidEntry) {
-            $summary['revenue'] += (float)($paidEntry['amount'] ?? 0);
+            if (($paidEntry['month'] ?? null) === $month) {
+                $summary['revenue'] += (float)($paidEntry['amount'] ?? 0);
+            }
         }
     }
     return $summary;
@@ -259,6 +312,6 @@ function summarizeParkingStatuses(array $spotStatuses): array {
 function getEntriesForMonth(array $entries, string $month): array {
     return array_values(array_filter(
         $entries,
-        fn($e) => ($e['month'] ?? null) === $month
+        fn($e) => entryCoversMonth($e, $month)
     ));
 }

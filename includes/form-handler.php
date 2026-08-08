@@ -19,7 +19,16 @@ $lastTariff         = null;
 $paymentUrl         = null;
 $paymentUnavailable = false;
 $submitted = [
-    'fio' => '', 'phone' => '', 'parking' => '', 'spot' => '', 'month' => '', 'agree' => '',
+    'fio' => '', 'phone' => '', 'parking' => '', 'spot' => '',
+    // 'period_mode' различает два сценария оплаты: 'month' — обычная
+    // оплата за целый календарный месяц (как раньше, поле 'month'),
+    // 'days' — оплата за произвольный период внутри одного месяца
+    // (поля 'date_from'/'date_to'). Оба набора полей всегда приходят
+    // из формы одновременно (JS просто прячет неактивную пару полей),
+    // но проверяем и считаем сумму только по паре, которая соответствует
+    // выбранному period_mode — см. ниже.
+    'period_mode' => 'month', 'month' => '', 'date_from' => '', 'date_to' => '',
+    'agree' => '',
 ];
 
 // Пользователь вернулся со страницы оплаты Robokassa.
@@ -46,7 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
     $submitted['phone']   = trim($_POST['phone'] ?? '');
     $submitted['parking'] = trim($_POST['parking'] ?? '');
     $submitted['spot']    = trim($_POST['spot'] ?? '');
-    $submitted['month']   = trim($_POST['month'] ?? '');
+    $submitted['period_mode'] = ($_POST['period_mode'] ?? 'month') === 'days' ? 'days' : 'month';
+    $submitted['month']     = trim($_POST['month'] ?? '');
+    $submitted['date_from'] = trim($_POST['date_from'] ?? '');
+    $submitted['date_to']   = trim($_POST['date_to'] ?? '');
     $submitted['agree']   = isset($_POST['agree']) ? '1' : '';
 
     if (mb_strlen($submitted['fio']) < 3) {
@@ -76,18 +88,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
     if ($submitted['spot'] === '' || !preg_match('/^\d{1,3}$/', $submitted['spot'])) {
         $errors['spot'] = 'Укажите номер машино-места (только цифры).';
     }
-    if (!in_array($submitted['month'], $months, true)) {
-        $errors['month'] = 'Выберите месяц оплаты.';
+    // Валидация периода — раздельно для двух режимов оплаты.
+    //
+    // Период МОЖЕТ пересекать календарные месяцы (и год) — это один
+    // платёж, без разбивки на несколько заявок. Единственное реальное
+    // ограничение — разумная максимальная длина периода (защита от
+    // опечатки в годе вроде "2099", а не бизнес-правило): подневная
+    // оплата на срок больше года не имеет смысла, для этого есть
+    // обычная помесячная оплата.
+    $maxPeriodDays = 366;
+    if ($submitted['period_mode'] === 'days') {
+        $dateFrom = DateTime::createFromFormat('Y-m-d', $submitted['date_from']) ?: null;
+        $dateTo   = DateTime::createFromFormat('Y-m-d', $submitted['date_to']) ?: null;
+
+        if (!$dateFrom || !$dateTo) {
+            $errors['date_from'] = 'Укажите даты периода.';
+        } else {
+            // Прошедшие даты разрешены намеренно (например, оплата
+            // постфактум за уже прошедшие дни) — единственная реальная
+            // проверка дат ниже: "по" не раньше "с" и разумный потолок
+            // длины периода.
+            if ($dateTo < $dateFrom) {
+                $errors['date_to'] = 'Дата окончания раньше даты начала.';
+            } elseif ($dateFrom->diff($dateTo)->days + 1 > $maxPeriodDays) {
+                $errors['date_to'] = "Слишком длинный период (максимум {$maxPeriodDays} дней). Для долгосрочной аренды используйте обычную помесячную оплату.";
+            }
+        }
+    } else {
+        if (!in_array($submitted['month'], $months, true)) {
+            $errors['month'] = 'Выберите месяц оплаты.';
+        }
     }
     if ($submitted['agree'] !== '1') {
         $errors['agree'] = 'Нужно принять условия публичной оферты.';
     }
 
     if (empty($errors)) {
-        $isPremium   = $submitted['parking'] === 'levitan' && isLevitanPremiumSpot($submitted['spot'], $levitanPremiumRanges);
-        $amount      = $isPremium ? $levitanPremiumPrice : $pricePerMonth;
-        $tariffText  = number_format($amount, 0, ',', ' ') . ' ₽';
-        $parkingName = $parkings[$submitted['parking']][0];
+        $isPremium    = $submitted['parking'] === 'levitan' && isLevitanPremiumSpot($submitted['spot'], $levitanPremiumRanges);
+        $monthlyPrice = $isPremium ? $levitanPremiumPrice : $pricePerMonth;
+        $parkingName  = $parkings[$submitted['parking']][0];
+
+        // monthLabels — список ВСЕХ календарных месяцев ("Месяц Год"),
+        // которые затрагивает заявка. Для обычной помесячной оплаты это
+        // всегда один месяц. Для оплаты за дни период может пересекать
+        // границу месяца (и года) — тогда список содержит два и более
+        // элемента (см. includes/functions.php::monthLabelsForPeriod()).
+        // entry['month'] (первый элемент) остаётся для обратной
+        // совместимости со старыми записями лога и местами, где
+        // ожидается одна строка; entry['months'] — полный список,
+        // именно по нему includes/log-reader.php определяет, в каких
+        // месяцах шахматки показывать место занятым (см. комментарий
+        // там же, entryCoversMonth()) — без этого, скажем, октябрьская
+        // часть периода "28 сентября – 3 октября" была бы не видна на
+        // шахматке за октябрь.
+        if ($submitted['period_mode'] === 'days') {
+            $period      = calculatePartialPeriodPrice($submitted['date_from'], $submitted['date_to'], $monthlyPrice);
+            $amount      = $period['total'];
+            $periodText  = periodDatesToText($submitted['date_from'], $submitted['date_to']) . " ({$period['days']} дн.)";
+            $monthLabels = monthLabelsForPeriod($submitted['date_from'], $submitted['date_to']);
+        } else {
+            $amount      = $monthlyPrice;
+            $periodText  = null;
+            $monthLabels = [$submitted['month']];
+        }
+        $tariffText = number_format($amount, 0, ',', ' ') . ' ₽';
 
         // Готовим номер счёта (InvId) и формируем платёжную ссылку
         // Robokassa ДО записи в лог — так в логе сразу будет payment_id
@@ -97,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
         // В отличие от ЮKassa здесь нет сетевого запроса на создание
         // платежа — ссылка с подписью формируется локально (см.
         // includes/robokassa.php::createRobokassaPayment()).
-        $description = "Машино-место №{$submitted['spot']}, {$parkingName}, {$submitted['month']}";
+        $description = "Машино-место №{$submitted['spot']}, {$parkingName}, " . ($periodText ?? $submitted['month']);
         $invId       = nextRobokassaInvId();
         $payment     = $invId !== null ? createRobokassaPayment($amount, $description, $invId) : null;
 
@@ -107,7 +171,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
             'phone'      => $normalizedPhone,
             'parking'    => $parkingName,
             'spot'       => $submitted['spot'],
-            'month'      => $submitted['month'],
+            'month'      => $monthLabels[0],
+            // months — полный список затронутых месяцев (см. комментарий
+            // выше); month — только первый, для обратной совместимости.
+            'months'     => $monthLabels,
+            // period — заполнено только для оплаты за несколько дней,
+            // null для обычной помесячной оплаты (обратная совместимость
+            // со старыми записями в логе, где ключа 'period' нет вовсе).
+            'period'     => $periodText,
             'amount'     => $amount,
             'tariff'     => $tariffText,
             'payment_id' => $payment['id'] ?? null,
@@ -134,7 +205,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
 
         // Необязательное уведомление на почту (сработает, только если на сервере настроен sendmail)
         $subject = '=?UTF-8?B?' . base64_encode('Новая заявка на оплату — ЛАЙНПАРКИНГ') . '?=';
-        $body = "ФИО: {$entry['fio']}\nТелефон: {$entry['phone']}\nПарковка: {$entry['parking']}\nМесто: {$entry['spot']}\nМесяц оплаты: {$entry['month']}\nТариф: {$entry['tariff']}\nДата заявки: {$entry['date']}";
+        $periodLine = $entry['period']
+            ? "Период оплаты: {$entry['period']} (месяцы: " . implode(', ', $entry['months']) . ")\n"
+            : "Месяц оплаты: {$entry['month']}\n";
+        $body = "ФИО: {$entry['fio']}\nТелефон: {$entry['phone']}\nПарковка: {$entry['parking']}\nМесто: {$entry['spot']}\n{$periodLine}Тариф: {$entry['tariff']}\nДата заявки: {$entry['date']}";
         $headers = "Content-Type: text/plain; charset=UTF-8\r\nFrom: ЛайнПаркинг <noreply@лайнпаркинг.рф>\r\n";
         @mail(NOTIFY_EMAIL, $subject, $body, $headers);
 
@@ -152,6 +226,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_request'])) {
         $paymentUnavailable = true;
         $success            = true;
         $lastTariff         = $entry['tariff'];
-        $submitted = ['fio' => '', 'phone' => '', 'parking' => '', 'spot' => '', 'month' => '', 'agree' => ''];
+        $submitted = [
+            'fio' => '', 'phone' => '', 'parking' => '', 'spot' => '',
+            'period_mode' => 'month', 'month' => '', 'date_from' => '', 'date_to' => '',
+            'agree' => '',
+        ];
     }
 }

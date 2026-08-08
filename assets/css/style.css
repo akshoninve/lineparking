@@ -307,6 +307,30 @@
   .field.has-err input, .field.has-err select{border-color:var(--red);}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 
+  /* Переключатель "Полный месяц" / "Свои даты" — обычные <button>,
+     не <input type="radio">: у радиокнопок нативный вид, который
+     браузер может отрисовать поверх кастомных стилей (это и произошло
+     на реальном устройстве — см. историю чата), кнопки такой проблемы
+     не имеют. Белая карточка + рамка: активная просто получает более
+     тёмную и толстую рамку, без заливки — рядом с жёлтой «Оплатить»
+     это не выглядит как второй конкурирующий CTA. */
+  .period-mode-toggle{display:flex;gap:10px;}
+  .mode-card{
+    flex:1;padding:11px 12px;font-size:14px;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    background:#fff;color:var(--ink-soft);border:1.5px solid #cfccc2;border-radius:3px;cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .mode-card.active{border-color:var(--asphalt);color:var(--ink);font-weight:600;}
+  .mode-card:hover:not(.active){border-color:#a9a69c;}
+
+  /* [hidden] по спецификации проигрывает .row2{display:grid} (обе —
+     обычные author-правила, а класс идёт раньше в каскаде) — то есть
+     без этого переопределения блок с датами оставался бы виден grid'ом
+     даже с атрибутом hidden. Специфичность .row2[hidden] выше, чем у
+     одного .row2, поэтому этот выигрыш гарантирован независимо от
+     порядка правил в файле. */
+  .row2[hidden]{display:none;}
+
   /* Итого к оплате: сумма и детали (место · месяц) — на отдельных
      строках, а не одной длинной фразой во flex-строке, чтобы не
      переносилось некрасиво посередине ("...Апрель\n2026"). */

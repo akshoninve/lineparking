@@ -49,7 +49,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Панель администратора — ЛайнПаркинг</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="stylesheet" href="../assets/css/admin.css">
+<link rel="stylesheet" href="<?= assetVersion('../assets/css/admin.css', 'assets/css/admin.css') ?>">
 </head>
 <body>
 
@@ -74,13 +74,16 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
 
   <?php foreach ($parkings as $key => [$name, $capacity]):
       $spotStatuses = $statusesByParking[$key];
-      $summary = summarizeParkingStatuses($spotStatuses);
+      $summary = summarizeParkingStatuses($spotStatuses, $selectedMonth);
   ?>
   <section class="parking-block">
     <div class="parking-head">
       <h2><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></h2>
       <div class="summary mono">
-        <span class="s-paid"><?= (int)$summary['paid'] ?> оплачено</span>
+        <span class="s-paid"><?= (int)$summary['paid'] ?> оплачено за месяц</span>
+        <?php if ($summary['paidPeriod'] > 0): ?>
+        <span class="s-paid-period"><?= (int)$summary['paidPeriod'] ?> оплачено датами</span>
+        <?php endif; ?>
         <span class="s-pending"><?= (int)$summary['pending'] ?> ожидает</span>
         <?php if ($summary['duplicate'] > 0): ?>
         <span class="s-duplicate">⚠ <?= (int)$summary['duplicate'] ?> дубль оплаты</span>
@@ -92,7 +95,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
     </div>
     <div class="spot-grid">
       <?php foreach ($spotStatuses as $spotNum => $spotEntries):
-          $resolved = resolveSpotDisplay($spotEntries);
+          $resolved = resolveSpotDisplay($spotEntries, $selectedMonth);
           $entry    = $resolved['entry'];
 
           switch ($resolved['state']) {
@@ -106,7 +109,11 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
                   break;
               case 'paid':
                   $cls = 'spot-paid';
-                  $titleAttr = 'Оплачено';
+                  $titleAttr = 'Оплачено за месяц';
+                  break;
+              case 'paid-period':
+                  $cls = 'spot-paid-period';
+                  $titleAttr = 'Оплачено произвольными датами' . (($entry['period'] ?? null) ? ': ' . $entry['period'] : '');
                   break;
               default:
                   $cls = 'spot-pending';
@@ -122,6 +129,13 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
         data-phone="<?= htmlspecialchars($entry['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         data-date="<?= htmlspecialchars($entry['date'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         data-tariff="<?= htmlspecialchars($entry['tariff'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+        <?php // period заполнено только для частичной (подневной) оплаты —
+              // см. includes/form-handler.php. Для обычной помесячной
+              // оплаты этого атрибута нет, admin.js сам падает обратно
+              // на data-month (см. ниже). ?>
+        <?php if (!empty($entry['period'])): ?>
+        data-period="<?= htmlspecialchars($entry['period'], ENT_QUOTES, 'UTF-8') ?>"
+        <?php endif; ?>
         data-status="<?= htmlspecialchars($entry['status'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         data-payment-id="<?= htmlspecialchars($entry['payment_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
         data-parking="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
@@ -138,6 +152,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
                     'phone'     => $e['phone'] ?? '',
                     'date'      => $e['date'] ?? '',
                     'tariff'    => $e['tariff'] ?? '',
+                    'period'    => $e['period'] ?? null,
                     'paymentId' => $e['payment_id'] ?? '',
                 ];
             }, $resolved['paidEntries']);
@@ -190,7 +205,7 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
               <td class="mono"><?= htmlspecialchars($e['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars($e['parking'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td>№<?= htmlspecialchars((string)($e['spot'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-              <td><?= htmlspecialchars($e['month'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
+              <td><?= htmlspecialchars($e['period'] ?? $e['month'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td><?= htmlspecialchars($e['tariff'] ?? '', ENT_QUOTES, 'UTF-8') ?></td>
               <td>
                 <?php $st = $e['status'] ?? ''; ?>
@@ -210,10 +225,10 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
     <div class="info-block legend-block">
       <h3>Обозначения цветов</h3>
       <div class="legend-items">
-        <div class="legend-item"><span class="legend-swatch spot-paid"></span>Оплачено</div>
-        <div class="legend-item"><span class="legend-swatch spot-pending"></span>Ожидает оплаты / другой незавершённый статус</div>
-        <div class="legend-item"><span class="legend-swatch spot-empty"></span>Заявок нет</div>
-        <div class="legend-item"><span class="legend-swatch spot-duplicate"></span>Оплачено дважды и более — требует проверки</div>
+        <div class="legend-item"><span class="legend-swatch spot-paid"></span>Оплачено за месяц</div>
+        <div class="legend-item"><span class="legend-swatch spot-paid-period"></span>Оплачено произвольными датами</div>
+        <div class="legend-item"><span class="legend-swatch spot-duplicate"></span>Оплачено дважды и более (проверить)</div>
+        <div class="legend-item"><span class="legend-swatch spot-pending"></span>Незавершённый статус</div>
       </div>
     </div>
 
@@ -249,6 +264,6 @@ $logEntries  = array_reverse(loadZayavkiLog($currentYear));
   </div>
 </div>
 
-<script src="../assets/js/admin.js" defer></script>
+<script src="<?= assetVersion('../assets/js/admin.js', 'assets/js/admin.js') ?>" defer></script>
 </body>
 </html>

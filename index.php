@@ -31,7 +31,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЛАЙНПАРКИНГ — паркинги в Видном</title>
 <meta name="description" content="Парковки «Левитан», «Купелинка» в г. Видное. Абонемент от <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽/месяц. Оплата парковочного места онлайн."><!-- «Нестеров» временно скрыта, см. includes/parkings-data.php — вернуть упоминание сюда вместе с ней -->
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="stylesheet" href="<?= assetVersion('assets/css/style.css', 'assets/css/style.css') ?>">
 </head>
 <body>
 
@@ -157,14 +157,36 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
             </div>
           </div>
 
-          <div class="field <?= isset($errors['month']) ? 'has-err' : '' ?>">
-            <label for="month">За какой месяц оплата</label>
+          <div class="field">
+            <label>За какой период оплата</label>
+            <div class="period-mode-toggle" id="periodModeToggle">
+              <button type="button" class="mode-card <?= $submitted['period_mode'] === 'days' ? '' : 'active' ?>" data-mode="month">Полный месяц</button>
+              <button type="button" class="mode-card <?= $submitted['period_mode'] === 'days' ? 'active' : '' ?>" data-mode="days">Свои даты</button>
+            </div>
+            <input type="hidden" id="periodMode" name="period_mode" value="<?= htmlspecialchars($submitted['period_mode'], ENT_QUOTES, 'UTF-8') ?>">
+          </div>
+
+          <div class="field <?= isset($errors['month']) ? 'has-err' : '' ?>" id="periodMonthField" <?= $submitted['period_mode'] === 'days' ? 'hidden' : '' ?>>
+            <label for="month">Месяц</label>
             <select id="month" name="month">
               <?php foreach ($months as $m): ?>
               <option value="<?= $m ?>" <?= $selectedMonthValue === $m ? 'selected' : '' ?>><?= $m ?></option>
               <?php endforeach; ?>
             </select>
             <?php if (isset($errors['month'])): ?><div class="err"><?= $errors['month'] ?></div><?php endif; ?>
+          </div>
+
+          <div class="row2 period-days-field" id="periodDaysField" <?= $submitted['period_mode'] === 'days' ? '' : 'hidden' ?>>
+            <div class="field <?= isset($errors['date_from']) ? 'has-err' : '' ?>">
+              <label for="date_from">С какого числа</label>
+              <input type="date" id="date_from" name="date_from" value="<?= htmlspecialchars($submitted['date_from'], ENT_QUOTES, 'UTF-8') ?>">
+              <?php if (isset($errors['date_from'])): ?><div class="err"><?= $errors['date_from'] ?></div><?php endif; ?>
+            </div>
+            <div class="field <?= isset($errors['date_to']) ? 'has-err' : '' ?>">
+              <label for="date_to">По какое число</label>
+              <input type="date" id="date_to" name="date_to" value="<?= htmlspecialchars($submitted['date_to'], ENT_QUOTES, 'UTF-8') ?>">
+              <?php if (isset($errors['date_to'])): ?><div class="err"><?= $errors['date_to'] ?></div><?php endif; ?>
+            </div>
           </div>
 
           <div class="order-total" id="orderTotal">
@@ -183,7 +205,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
           <div class="submit-row">
             <button type="submit" name="send_request" value="1" class="btn btn-primary" id="payButton">Перейти к оплате</button>
           </div>
-          <div class="fine-print">Услуга — предоставление машино-места в аренду на 1 календарный месяц. Стоимость — от <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽ (для мест <?= levitanPremiumRangesText($levitanPremiumRanges) ?> на парковке «Левитан» — <?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽/мес), сумма рассчитывается автоматически по номеру места. После нажатия кнопки вы попадёте на защищённую страницу оплаты картой.</div>
+          <div class="fine-print">Услуга — предоставление машино-места в аренду на 1 календарный месяц или на произвольный период (в том числе на стыке месяцев). При оплате за несколько дней стоимость суток считается отдельно по каждому месяцу периода — месячный тариф, делённый на число дней в этом месяце. Стоимость — от <?= number_format($pricePerMonth, 0, ',', ' ') ?> ₽/мес (для мест <?= levitanPremiumRangesText($levitanPremiumRanges) ?> на парковке «Левитан» — <?= number_format($levitanPremiumPrice, 0, ',', ' ') ?> ₽/мес), сумма рассчитывается автоматически по номеру места и выбранному периоду. После нажатия кнопки вы попадёте на защищённую страницу оплаты картой.</div>
         </form>
       </div>
     </div>
@@ -286,7 +308,7 @@ $selectedMonthValue = $submitted['month'] !== '' ? $submitted['month'] : $defaul
     ), JSON_UNESCAPED_UNICODE) ?>
   };
 </script>
-<script src="assets/js/main.js" defer></script>
+<script src="<?= assetVersion('assets/js/main.js', 'assets/js/main.js') ?>" defer></script>
 
 </body>
 </html>

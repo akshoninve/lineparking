@@ -16,7 +16,7 @@ require_once __DIR__ . '/bootstrap.php';
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Публичная оферта — ЛайнПаркинг</title>
 <meta name="description" content="Публичная оферта ООО «ЛайнПаркинг» на оказание услуг по предоставлению машино-места.">
-<link rel="stylesheet" href="assets/css/oferta.css">
+<link rel="stylesheet" href="<?= assetVersion('assets/css/oferta.css', 'assets/css/oferta.css') ?>">
 </head>
 <body>
 

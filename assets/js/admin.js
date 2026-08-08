@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     addRow('Парковка', btn.dataset.parking);
     addRow('Место', '№' + btn.dataset.spot);
-    addRow('Период', btn.dataset.month);
+    addRow('Период', btn.dataset.period || btn.dataset.month);
 
     var payments = [];
     try {
@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       addRow('ФИО', p.fio);
       addRow('Телефон', p.phone);
+      if (p.period) addRow('Период', p.period);
       addRow('Дата заявки', p.date);
       addRow('Тариф', p.tariff);
       addRow('ID платежа', p.paymentId);
@@ -101,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     addRow('Парковка', btn.dataset.parking);
     addRow('Место', '№' + btn.dataset.spot);
-    addRow('Период', btn.dataset.month);
+    addRow('Период', btn.dataset.period || btn.dataset.month);
     addRow('Статус', btn.dataset.status);
     addRow('Тариф', btn.dataset.tariff);
     addRow('ФИО', btn.dataset.fio);
